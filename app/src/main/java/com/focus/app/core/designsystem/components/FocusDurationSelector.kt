@@ -4,6 +4,8 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -15,8 +17,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.focus.app.core.designsystem.FocusAccent
 import com.focus.app.core.designsystem.FocusAccentBorder
 import com.focus.app.core.designsystem.FocusAccentLight
@@ -32,14 +36,14 @@ import com.focus.app.core.designsystem.FocusOnSurfaceVariant
  * El chip seleccionado se resalta con el acento lavanda.
  *
  * @param selectedMinutes La duración seleccionada actualmente en minutos.
- * @param options Lista de opciones disponibles en minutos.
+ * @param options Lista de opciones disponibles en minutos (por defecto 25, 45, 60, 90).
  * @param onOptionSelected Callback cuando el usuario selecciona una opción.
  * @param modifier Modificador externo.
  */
 @Composable
 fun FocusDurationSelector(
     selectedMinutes: Int,
-    options: List<Int>,
+    options: List<Int> = listOf(25, 45, 60, 90),
     onOptionSelected: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -51,6 +55,7 @@ fun FocusDurationSelector(
             FocusDurationChip(
                 minutes = minutes,
                 isSelected = minutes == selectedMinutes,
+                isSignature = minutes == 45,
                 onClick = { onOptionSelected(minutes) },
                 modifier = Modifier.weight(1f)
             )
@@ -59,11 +64,30 @@ fun FocusDurationSelector(
 }
 
 /**
+ * Sobrecarga de compatibilidad para llamadas con nombres de parámetros alternativos.
+ */
+@Composable
+fun FocusDurationSelector(
+    selectedDurationMinutes: Int,
+    options: List<Int> = listOf(25, 45, 60, 90),
+    onDurationSelected: (Int) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    FocusDurationSelector(
+        selectedMinutes = selectedDurationMinutes,
+        options = options,
+        onOptionSelected = onDurationSelected,
+        modifier = modifier
+    )
+}
+
+/**
  * Chip individual de duración.
  * Muestra los minutos y su estado de selección.
  *
  * @param minutes Duración en minutos.
  * @param isSelected Si este chip está seleccionado actualmente.
+ * @param isSignature Si es la duración recomendada estándar (45 min).
  * @param onClick Acción al presionar.
  * @param modifier Modificador externo.
  */
@@ -71,10 +95,10 @@ fun FocusDurationSelector(
 fun FocusDurationChip(
     minutes: Int,
     isSelected: Boolean,
+    isSignature: Boolean = false,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    // Animación de color de fondo al cambiar selección
     val backgroundColor by animateColorAsState(
         targetValue = if (isSelected) FocusAccentSubtle else FocusCard,
         animationSpec = spring(stiffness = 300f),
@@ -95,7 +119,7 @@ fun FocusDurationChip(
 
     Surface(
         onClick = onClick,
-        modifier = modifier.height(52.dp),
+        modifier = modifier.height(56.dp),
         shape = FocusDurationChipShape,
         color = backgroundColor,
         border = BorderStroke(
@@ -103,16 +127,28 @@ fun FocusDurationChip(
             color = borderColor
         )
     ) {
-        Row(
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(horizontal = 4.dp)
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+            modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp)
         ) {
             Text(
                 text = formatDurationChipLabel(minutes),
-                style = MaterialTheme.typography.labelLarge.copy(color = textColor),
+                style = MaterialTheme.typography.labelLarge.copy(
+                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
+                    color = textColor
+                ),
                 textAlign = TextAlign.Center
             )
+            if (isSignature) {
+                Text(
+                    text = "RECOMENDADO",
+                    fontSize = 8.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.5.sp,
+                    color = if (isSelected) FocusAccent else FocusAccent.copy(alpha = 0.6f)
+                )
+            }
         }
     }
 }
