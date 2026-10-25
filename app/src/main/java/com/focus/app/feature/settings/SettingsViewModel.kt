@@ -4,9 +4,11 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.focus.app.BuildConfig
+import com.focus.app.data.local.preferences.FocusPreferencesDataSource
 import com.focus.app.domain.usecase.GetRestrictionStatusUseCase
 import com.focus.app.domain.usecase.SaveSelectedAppsUseCase
 import com.focus.app.platform.accessibility.FocusAccessibilityService
+import com.focus.app.platform.smartwatch.SmartwatchSyncManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -21,13 +23,15 @@ import javax.inject.Inject
  * ViewModel para la pantalla de configuración de Focus.
  *
  * Administra las preferencias globales, monitorea el estado del servicio de accesibilidad
- * y permite actualizar la duración predeterminada de las sesiones.
+ * y gestiona las configuraciones de sincronización háptica y detección de sedentarismo del Smartwatch.
  */
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val restrictionStatus: GetRestrictionStatusUseCase,
-    private val saveSelectedApps: SaveSelectedAppsUseCase
+    private val saveSelectedApps: SaveSelectedAppsUseCase,
+    private val preferencesDataSource: FocusPreferencesDataSource,
+    val smartwatchSyncManager: SmartwatchSyncManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(
@@ -39,45 +43,97 @@ class SettingsViewModel @Inject constructor(
 
     init {
         observePreferences()
+        observeSmartwatch()
         checkAccessibilityService()
     }
 
-    /**
-     * Observa las preferencias almacenadas en DataStore y actualiza el estado reactivamente.
-     */
     private fun observePreferences() {
         viewModelScope.launch {
             combine(
                 restrictionStatus.preferredDurationMinutes,
-                saveSelectedApps.selectedPackageNames
-            ) { duration, packages ->
-                Pair(duration, packages.size)
-            }.collect { (duration, packageCount) ->
+                saveSelectedApps.selectedPackageNames,
+                preferencesDataSource.smartwatchHapticEnabled,
+                preferencesDataSource.smartwatchSedentarismEnabled,
+                preferencesDataSource.smartwatchSedentarismThresholdMinutes,
+                preferencesDataSource.smartwatchRestIndicatorEnabled
+            ) { duration, packages, haptic, sedentarism, threshold, restIndicator ->
+                SettingsData(
+                    duration = if (duration > 0) duration else 45,
+                    packageCount = packages.size,
+                    haptic = haptic,
+                    sedentarism = sedentarism,
+                    threshold = threshold,
+                    restIndicator = restIndicator
+                )
+            }.collect { data ->
                 _uiState.update {
                     it.copy(
-                        preferredDurationMinutes = duration,
-                        selectedAppsCount = packageCount
+                        preferredDurationMinutes = data.duration,
+                        selectedAppsCount = data.packageCount,
+                        isSmartwatchHapticEnabled = data.haptic,
+                        isSmartwatchSedentarismEnabled = data.sedentarism,
+                        smartwatchSedentarismThresholdMinutes = data.threshold,
+                        isSmartwatchRestIndicatorEnabled = data.restIndicator
                     )
                 }
             }
         }
     }
 
-    /**
-     * Verifica si el servicio de accesibilidad de Focus está habilitado en los ajustes del sistema.
-     * Se llama en cada reanudación de la pantalla para reflejar cambios fuera de la app.
-     */
+    private fun observeSmartwatch() {
+        viewModelScope.launch {
+            smartwatchSyncManager.connectedWatch.collect { watch ->
+                _uiState.update {
+                    it.copy(
+                        smartwatchName = watch.name,
+                        isSmartwatchConnected = watch.isConnected
+                    )
+                }
+            }
+        }
+    }
+
     fun checkAccessibilityService() {
         val isEnabled = FocusAccessibilityService.isServiceEnabled(context)
         _uiState.update { it.copy(isAccessibilityServiceEnabled = isEnabled) }
     }
 
-    /**
-     * Guarda la duración por defecto seleccionada por el usuario.
-     */
     fun onDurationSelected(minutes: Int) {
         viewModelScope.launch {
             restrictionStatus.savePreferredDuration(minutes)
         }
     }
+
+    fun onToggleSmartwatchHaptic(enabled: Boolean) {
+        viewModelScope.launch {
+            preferencesDataSource.setSmartwatchHapticEnabled(enabled)
+        }
+    }
+
+    fun onToggleSmartwatchSedentarism(enabled: Boolean) {
+        viewModelScope.launch {
+            preferencesDataSource.setSmartwatchSedentarismEnabled(enabled)
+        }
+    }
+
+    fun onSedentarismThresholdSelected(minutes: Int) {
+        viewModelScope.launch {
+            preferencesDataSource.setSmartwatchSedentarismThreshold(minutes)
+        }
+    }
+
+    fun onToggleSmartwatchRestIndicator(enabled: Boolean) {
+        viewModelScope.launch {
+            preferencesDataSource.setSmartwatchRestIndicatorEnabled(enabled)
+        }
+    }
+
+    private data class SettingsData(
+        val duration: Int,
+        val packageCount: Int,
+        val haptic: Boolean,
+        val sedentarism: Boolean,
+        val threshold: Int,
+        val restIndicator: Boolean
+    )
 }
