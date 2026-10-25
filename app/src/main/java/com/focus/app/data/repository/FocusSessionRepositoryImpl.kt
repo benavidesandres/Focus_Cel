@@ -34,7 +34,8 @@ class FocusSessionRepositoryImpl @Inject constructor(
             endMs = session.endTimestampMs,
             durationMinutes = session.durationMinutes,
             packageNames = session.selectedPackageNames,
-            status = SessionMapper.toStatusString(session.status)
+            status = SessionMapper.toStatusString(session.status),
+            activityType = session.activityType.id
         )
         // Actualiza el flujo en memoria para reactividad inmediata
         _activeSession.value = session

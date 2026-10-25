@@ -23,6 +23,7 @@ class StartFocusSessionUseCase @Inject constructor(
     suspend operator fun invoke(
         durationMinutes: Int,
         selectedPackageNames: Set<String>,
+        activityType: com.focus.app.domain.model.FocusActivityType = com.focus.app.domain.model.FocusActivityType.TRABAJAR,
         nowMs: Long = System.currentTimeMillis()
     ): Result<FocusSession> {
         // Validación: la duración debe ser positiva
@@ -49,7 +50,9 @@ class StartFocusSessionUseCase @Inject constructor(
             endTimestampMs = nowMs + (durationMinutes * 60_000L),
             durationMinutes = durationMinutes,
             selectedPackageNames = selectedPackageNames,
-            status = SessionStatus.ACTIVE
+            status = SessionStatus.ACTIVE,
+            activityType = activityType,
+            breakDurationMinutes = activityType.recommendedRestMinutes
         )
 
         sessionRepository.saveSession(session)

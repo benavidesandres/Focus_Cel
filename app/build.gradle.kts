@@ -105,6 +105,9 @@ dependencies {
     // Splash Screen
     implementation(libs.androidx.splash.screen)
 
+    // Wearable Data Layer (Smartwatch sync & communication)
+    implementation(libs.play.services.wearable)
+
     // Herramientas de depuración Compose (solo debug)
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)

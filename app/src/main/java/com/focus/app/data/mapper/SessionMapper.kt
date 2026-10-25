@@ -18,6 +18,7 @@ object SessionMapper {
      */
     fun toDomain(snapshot: FocusPreferencesDataSource.SessionSnapshot): FocusSession? {
         val status = mapStatus(snapshot.status) ?: return null
+        val activity = com.focus.app.domain.model.FocusActivityType.fromId(snapshot.activityType)
 
         return FocusSession(
             id = snapshot.id,
@@ -25,7 +26,8 @@ object SessionMapper {
             endTimestampMs = snapshot.endMs,
             durationMinutes = snapshot.durationMinutes,
             selectedPackageNames = snapshot.packageNames,
-            status = status
+            status = status,
+            activityType = activity
         )
     }
 

@@ -29,6 +29,9 @@ coroutines = "1.8.1"
 # Splash Screen
 splashScreen = "1.0.1"
 
+# Google Play Services Wearable (Smartwatch sync)
+playServicesWearable = "18.2.0"
+
 # Testing
 junit = "4.13.2"
 junitExt = "1.2.1"
@@ -73,6 +76,9 @@ kotlinx-coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-cor
 
 # Splash Screen
 androidx-splash-screen = { group = "androidx.core", name = "core-splashscreen", version.ref = "splashScreen" }
+
+# Wearable Data Layer (Smartwatch)
+play-services-wearable = { group = "com.google.android.gms", name = "play-services-wearable", version.ref = "playServicesWearable" }
 
 # Testing
 junit = { group = "junit", name = "junit", version.ref = "junit" }

@@ -18,7 +18,12 @@ data class FocusSession(
     val endTimestampMs: Long,
     val durationMinutes: Int,
     val selectedPackageNames: Set<String>,
-    val status: SessionStatus
+    val status: SessionStatus,
+    val activityType: FocusActivityType = FocusActivityType.TRABAJAR,
+    val isSmartwatchSynced: Boolean = true,
+    val isSedentaryAlertActive: Boolean = false,
+    val isBreakActive: Boolean = false,
+    val breakDurationMinutes: Int = 5
 ) {
     /**
      * Calcula los milisegundos restantes basándose en el timestamp actual.
