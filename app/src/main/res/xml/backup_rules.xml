@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Reglas de copia de seguridad completa -->
+<full-backup-content>
+    <!-- No se realiza copia de seguridad de datos de sesión ni preferencias -->
+    <exclude domain="sharedpref" path="." />
+    <exclude domain="database" path="." />
+</full-backup-content>

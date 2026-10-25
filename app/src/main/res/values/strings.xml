@@ -1,0 +1,79 @@
+<resources>
+    <string name="app_name">Focus</string>
+    <string name="accessibility_service_label">Focus — App Restriction</string>
+    <string name="accessibility_service_description">Focus uses this service to detect when a restricted app opens during an active focus session and shows a reminder screen. Focus never reads screen content, passwords, or personal data.</string>
+
+    <!-- Pantalla principal -->
+    <string name="home_subtitle">Make room for what matters.</string>
+    <string name="home_start_session">Start Focus Session</string>
+    <string name="home_select_apps">Select Apps</string>
+    <string name="home_no_apps_selected">No apps selected</string>
+    <string name="home_apps_selected">%d apps selected</string>
+    <string name="home_duration_label">Focus Duration</string>
+    <string name="home_session_ready">Ready to focus</string>
+    <string name="home_session_not_ready">Select apps to restrict</string>
+    <string name="home_restriction_unavailable">Accessibility service disabled — timer will run but apps won\'t be restricted</string>
+    <string name="home_open_settings">Settings</string>
+
+    <!-- Presets de duración -->
+    <string name="duration_25_min">25 min</string>
+    <string name="duration_45_min">45 min</string>
+    <string name="duration_60_min">60 min</string>
+    <string name="duration_custom">Custom</string>
+
+    <!-- Selección de aplicaciones -->
+    <string name="app_selection_title">Select Apps to Restrict</string>
+    <string name="app_selection_search_hint">Search apps…</string>
+    <string name="app_selection_empty">No apps found</string>
+    <string name="app_selection_loading">Loading your apps…</string>
+    <string name="app_selection_error">Could not load apps. Please try again.</string>
+    <string name="app_selection_done">Done</string>
+    <string name="app_selection_selected_count">%d selected</string>
+    <string name="app_selection_clear_all">Clear all</string>
+    <string name="app_selection_select_all">Select all</string>
+
+    <!-- Pantalla de sesión activa -->
+    <string name="session_title">Stay Focused</string>
+    <string name="session_status_active">Session active</string>
+    <string name="session_status_completed">Session complete!</string>
+    <string name="session_status_interrupted">Session ended</string>
+    <string name="session_end_button">End Session</string>
+    <string name="session_end_confirm_title">End session?</string>
+    <string name="session_end_confirm_message">Your focus session will end and app restrictions will be removed.</string>
+    <string name="session_end_confirm_yes">End Session</string>
+    <string name="session_end_confirm_no">Keep Going</string>
+    <string name="session_restricted_apps">%d apps restricted</string>
+    <string name="session_done_button">Done</string>
+    <string name="session_great_job">Great job!</string>
+    <string name="session_completed_message">You completed a %s focus session.</string>
+
+    <!-- Pantalla de restricción (mostrada por AccessibilityService) -->
+    <string name="restriction_title">You\'re in Focus mode</string>
+    <string name="restriction_message">You selected this app to restrict during your focus session. Stay on track!</string>
+    <string name="restriction_time_remaining">Time remaining: %s</string>
+    <string name="restriction_go_back">Go back</string>
+    <string name="restriction_end_session">End Session</string>
+
+    <!-- Configuración -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_accessibility_section">Accessibility Service</string>
+    <string name="settings_accessibility_enabled">Focus restriction service is active</string>
+    <string name="settings_accessibility_disabled">Focus restriction service is disabled</string>
+    <string name="settings_accessibility_description">Focus needs Android\'s Accessibility Service to detect when restricted apps are opened. This service only reads window events — never your screen content or personal data.</string>
+    <string name="settings_open_accessibility">Open Accessibility Settings</string>
+    <string name="settings_preferences_section">Preferences</string>
+    <string name="settings_default_duration">Default Duration</string>
+    <string name="settings_about_section">About</string>
+    <string name="settings_version">Version</string>
+    <string name="settings_privacy">Focus is 100%% local — no data ever leaves your device.</string>
+
+    <!-- Errores genéricos -->
+    <string name="error_generic">Something went wrong. Please try again.</string>
+    <string name="error_retry">Retry</string>
+
+    <!-- Notificación de sesión activa -->
+    <string name="notification_channel_name">Focus Session</string>
+    <string name="notification_channel_description">Shows when a focus session is active</string>
+    <string name="notification_session_active">Focus session active — %s remaining</string>
+    <string name="notification_session_title">Focus</string>
+</resources>

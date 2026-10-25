@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Ícono de primer plano del lanzador de Focus.
+    Representa un objetivo minimalista (bullseye) que evoca concentración.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Círculo exterior -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#A78BFA"
+        android:strokeWidth="3"
+        android:pathData="M54,54 m-28,0 a28,28 0 1,1 56,0 a28,28 0 1,1 -56,0" />
+
+    <!-- Círculo medio -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#A78BFA"
+        android:strokeWidth="3"
+        android:pathData="M54,54 m-18,0 a18,18 0 1,1 36,0 a18,18 0 1,1 -36,0" />
+
+    <!-- Punto central -->
+    <path
+        android:fillColor="#A78BFA"
+        android:pathData="M54,54 m-7,0 a7,7 0 1,1 14,0 a7,7 0 1,1 -14,0" />
+
+</vector>

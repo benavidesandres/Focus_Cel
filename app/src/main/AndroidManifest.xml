@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Manifiesto principal de la aplicación Focus.
+    Declara permisos, actividades y servicios requeridos.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!--
+        QUERY_ALL_PACKAGES: Necesario para enumerar todas las aplicaciones lanzables
+        instaladas en el dispositivo y mostrarlas en la pantalla de selección.
+        Implicación de distribución: Google Play requiere justificación en el formulario
+        de declaración de permisos. Este permiso se usa exclusivamente para mostrar
+        al usuario sus aplicaciones instaladas y nunca se transmite a servidores externos.
+    -->
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"
+        tools:ignore="QueryAllPackagesPermission" />
+
+    <!--
+        FOREGROUND_SERVICE: Requerido para mantener el servicio de sesión activo
+        cuando la aplicación está en segundo plano.
+    -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+
+    <!--
+        POST_NOTIFICATIONS: Requerido en Android 13+ para mostrar notificaciones
+        de sesión activa desde el servicio en primer plano.
+    -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!--
+        RECEIVE_BOOT_COMPLETED: Permite reconciliar sesiones activas tras reinicio.
+    -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <application
+        android:name=".app.FocusApplication"
+        android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.Focus"
+        tools:targetApi="31">
+
+        <!-- Actividad principal de la aplicación -->
+        <activity
+            android:name=".app.MainActivity"
+            android:exported="true"
+            android:theme="@style/Theme.Focus.Splash"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!--
+            Actividad de restricción mostrada por FocusAccessibilityService
+            cuando el usuario intenta abrir una aplicación bloqueada durante una sesión activa.
+        -->
+        <activity
+            android:name=".platform.accessibility.RestrictionActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Focus"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTop"
+            android:noHistory="true" />
+
+        <!--
+            Servicio de accesibilidad para detectar aplicaciones en primer plano
+            y mostrar la pantalla de restricción durante sesiones activas.
+            El usuario debe habilitarlo manualmente en Ajustes > Accesibilidad.
+        -->
+        <service
+            android:name=".platform.accessibility.FocusAccessibilityService"
+            android:exported="true"
+            android:label="@string/accessibility_service_label"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_service_config" />
+        </service>
+
+        <!-- Receptor para reconciliar sesiones tras reinicio del dispositivo -->
+        <receiver
+            android:name=".platform.receiver.BootCompletedReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
+    </application>
+
+</manifest>

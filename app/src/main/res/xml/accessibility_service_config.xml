@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Configuración del servicio de accesibilidad Focus.
+    Define qué eventos de ventana se deben interceptar para detectar
+    aplicaciones en primer plano durante una sesión activa.
+-->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:accessibilityFlags="flagDefault"
+    android:canRetrieveWindowContent="false"
+    android:description="@string/accessibility_service_description"
+    android:notificationTimeout="100"
+    android:packageNames=""
+    android:settingsActivity="com.focus.app.app.MainActivity" />

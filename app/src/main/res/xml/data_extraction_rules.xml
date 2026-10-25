@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Reglas de extracción de datos para Android 12+ -->
+<data-extraction-rules>
+    <cloud-backup>
+        <!-- No se incluyen preferencias en copias de seguridad en la nube -->
+        <exclude domain="sharedpref" path="." />
+    </cloud-backup>
+</data-extraction-rules>

@@ -1,0 +1,4 @@
+<resources>
+    <!-- Color de fondo para la pantalla de splash -->
+    <color name="splash_background">#0D0D14</color>
+</resources>
