@@ -22,13 +22,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.RadioButtonUnchecked
 import androidx.compose.material.icons.rounded.Warning
+import androidx.compose.material.icons.rounded.Watch
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -41,8 +42,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -55,7 +58,6 @@ import com.focus.app.core.designsystem.FocusAccentSubtle
 import com.focus.app.core.designsystem.FocusBackground
 import com.focus.app.core.designsystem.FocusBorder
 import com.focus.app.core.designsystem.FocusCard
-import com.focus.app.core.designsystem.FocusCardElevated
 import com.focus.app.core.designsystem.FocusOnSurface
 import com.focus.app.core.designsystem.FocusOnSurfaceDim
 import com.focus.app.core.designsystem.FocusOnSurfaceVariant
@@ -64,19 +66,20 @@ import com.focus.app.core.designsystem.FocusSuccess
 import com.focus.app.core.designsystem.FocusSuccessSubtle
 import com.focus.app.core.designsystem.FocusWarning
 import com.focus.app.core.designsystem.FocusWarningSubtle
+import com.focus.app.core.designsystem.components.FocusActivitySelector
 import com.focus.app.core.designsystem.components.FocusDurationSelector
 import com.focus.app.core.designsystem.components.FocusPrimaryButton
 import com.focus.app.core.designsystem.components.FocusSecondaryButton
+import com.focus.app.core.designsystem.components.SmartwatchLivePreview
+import com.focus.app.core.designsystem.components.SmartwatchStatusCard
+import com.focus.app.domain.model.FocusActivityType
 
 /**
- * Pantalla principal de Focus.
- * Muestra la configuración de sesión, la selección de duración,
- * el estado de las restricciones y los controles de inicio.
+ * Pantalla principal de Focus adaptada como complemento para Smartwatch (Wear OS).
  *
- * @param onNavigateToAppSelection Navegar a la pantalla de selección de apps.
- * @param onNavigateToSession Navegar a la pantalla de sesión activa.
- * @param onNavigateToSettings Navegar a la configuración.
- * @param viewModel ViewModel inyectado por Hilt.
+ * Permite seleccionar la actividad previa:
+ * ¿Qué vas a hacer? [ Estudiar ] [ Trabajar ] [ Leer ]
+ * Seleccionar duración (ej. 45 min) y monitorear la conexión con el reloj.
  */
 @Composable
 fun HomeScreen(
@@ -89,7 +92,6 @@ fun HomeScreen(
     val navigateToSession by viewModel.navigateToSession.collectAsStateWithLifecycle()
     val lifecycleOwner = LocalLifecycleOwner.current
 
-    // Navega a la sesión activa cuando el ViewModel lo solicita
     LaunchedEffect(navigateToSession) {
         if (navigateToSession) {
             viewModel.onNavigatedToSession()
@@ -97,7 +99,6 @@ fun HomeScreen(
         }
     }
 
-    // Verifica el estado del servicio de accesibilidad al reanudar la pantalla
     LaunchedEffect(lifecycleOwner) {
         lifecycleOwner.repeatOnLifecycle(Lifecycle.State.RESUMED) {
             viewModel.checkAccessibilityService()
@@ -106,20 +107,21 @@ fun HomeScreen(
 
     HomeScreenContent(
         uiState = uiState,
+        onActivitySelected = viewModel::onActivitySelected,
         onDurationSelected = viewModel::onDurationSelected,
+        onTestSmartwatchVibration = viewModel::onTestSmartwatchVibration,
         onStartSession = viewModel::onStartSession,
         onNavigateToAppSelection = onNavigateToAppSelection,
         onNavigateToSettings = onNavigateToSettings
     )
 }
 
-/**
- * Contenido puro de la pantalla principal (sin ViewModel para facilitar el preview).
- */
 @Composable
 private fun HomeScreenContent(
     uiState: HomeUiState,
+    onActivitySelected: (FocusActivityType) -> Unit,
     onDurationSelected: (Int) -> Unit,
+    onTestSmartwatchVibration: () -> Unit,
     onStartSession: () -> Unit,
     onNavigateToAppSelection: () -> Unit,
     onNavigateToSettings: () -> Unit
@@ -129,7 +131,6 @@ private fun HomeScreenContent(
             .fillMaxSize()
             .background(FocusBackground)
     ) {
-        // Degradado sutil en la parte superior para profundidad visual
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -137,7 +138,7 @@ private fun HomeScreenContent(
                 .background(
                     Brush.verticalGradient(
                         colors = listOf(
-                            FocusAccentDark.copy(alpha = 0.08f),
+                            FocusAccentDark.copy(alpha = 0.09f),
                             Color.Transparent
                         )
                     )
@@ -154,29 +155,60 @@ private fun HomeScreenContent(
             // ── Barra superior: Branding + Acceso a Configuración ──────────
             HomeTopBar(onNavigateToSettings = onNavigateToSettings)
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(6.dp))
 
-            // ── Subtítulo ──────────────────────────────────────────────────
             Text(
-                text = "Make room for what matters.",
+                text = "Protege tu atención en tu celular y tu reloj.",
                 style = MaterialTheme.typography.bodyLarge,
                 color = FocusOnSurfaceVariant
             )
 
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(26.dp))
 
-            // ── Tarjeta de estado de sesión ─────────────────────────────────
-            SessionStatusCard(uiState = uiState)
+            // ── Tarjeta de Estado del Smartwatch ────────────────────────────
+            SmartwatchStatusCard(
+                device = uiState.smartwatchDevice,
+                onTestVibration = onTestSmartwatchVibration
+            )
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // ── Selector de duración ────────────────────────────────────────
+            // ── Pregunta Principal: ¿Qué vas a hacer? ────────────────────────
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    text = "¿Qué vas a hacer?",
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                    color = FocusOnSurface
+                )
+                FocusActivitySelector(
+                    selectedActivity = uiState.selectedActivity,
+                    onActivitySelected = onActivitySelected
+                )
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // ── Selector de duración (45 minutos destacado) ─────────────────
             DurationSection(
                 uiState = uiState,
                 onDurationSelected = onDurationSelected
             )
 
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // ── Vista previa interactiva de la pantalla del reloj ────────────
+            SmartwatchLivePreview(
+                activity = uiState.selectedActivity,
+                timeLabel = "${uiState.selectedDurationMinutes}:00",
+                progress = 0f
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // ── Tarjeta de estado de sesión / Apps seleccionadas ────────────
+            SessionStatusCard(uiState = uiState)
+
+            Spacer(modifier = Modifier.height(28.dp))
 
             // ── Botones de acción ───────────────────────────────────────────
             ActionSection(
@@ -185,7 +217,7 @@ private fun HomeScreenContent(
                 onNavigateToAppSelection = onNavigateToAppSelection
             )
 
-            // ── Banner de accesibilidad (si el servicio no está habilitado) ─
+            // ── Banner de advertencia de accesibilidad ──────────────────────
             AnimatedVisibility(
                 visible = !uiState.isAccessibilityServiceEnabled,
                 enter = expandVertically() + fadeIn(),
@@ -200,9 +232,6 @@ private fun HomeScreenContent(
     }
 }
 
-/**
- * Barra superior con el nombre de la app y el botón de configuración.
- */
 @Composable
 private fun HomeTopBar(
     onNavigateToSettings: () -> Unit
@@ -214,12 +243,39 @@ private fun HomeTopBar(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Column {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
             Text(
                 text = "Focus",
-                style = MaterialTheme.typography.headlineSmall,
+                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
                 color = FocusOnSurface
             )
+            Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = FocusAccentSubtle,
+                border = BorderStroke(1.dp, FocusAccent.copy(alpha = 0.3f))
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Watch,
+                        contentDescription = null,
+                        tint = FocusAccentLight,
+                        modifier = Modifier.size(12.dp)
+                    )
+                    Text(
+                        text = "COMPANION",
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = FocusAccentLight
+                    )
+                }
+            }
         }
 
         IconButton(
@@ -236,9 +292,45 @@ private fun HomeTopBar(
     }
 }
 
-/**
- * Tarjeta de estado de la sesión que muestra la configuración actual y la disponibilidad.
- */
+@Composable
+private fun DurationSection(
+    uiState: HomeUiState,
+    onDurationSelected: (Int) -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Duración de Enfoque",
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                color = FocusOnSurface
+            )
+            AnimatedContent(
+                targetState = uiState.selectedDurationMinutes,
+                transitionSpec = {
+                    fadeIn(tween(150)) togetherWith fadeOut(tween(150))
+                },
+                label = "DurationSection_selected"
+            ) { minutes ->
+                Text(
+                    text = formatDuration(minutes),
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    color = FocusAccentLight
+                )
+            }
+        }
+
+        FocusDurationSelector(
+            selectedMinutes = uiState.selectedDurationMinutes,
+            options = uiState.durationOptions,
+            onOptionSelected = onDurationSelected
+        )
+    }
+}
+
 @Composable
 private fun SessionStatusCard(uiState: HomeUiState) {
     Surface(
@@ -248,50 +340,45 @@ private fun SessionStatusCard(uiState: HomeUiState) {
         border = BorderStroke(1.dp, FocusBorder)
     ) {
         Column(
-            modifier = Modifier.padding(24.dp),
-            verticalArrangement = Arrangement.spacedBy(20.dp)
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Encabezado de la tarjeta
             Text(
-                text = "Session Configuration",
-                style = MaterialTheme.typography.titleMedium,
+                text = "Configuración Sincronizada",
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
                 color = FocusOnSurface
             )
 
-            // Estado de apps seleccionadas
             StatusRow(
-                label = "Apps to restrict",
+                label = "Actividad elegida",
+                value = uiState.selectedActivity.displayName,
+                isPositive = true
+            )
+
+            StatusRow(
+                label = "Apps a bloquear en celular",
                 value = if (uiState.selectedAppCount == 0) {
-                    "None selected"
+                    "Ninguna (Modo Zen solo reloj)"
                 } else {
-                    "${uiState.selectedAppCount} selected"
+                    "${uiState.selectedAppCount} bloqueadas"
                 },
                 isPositive = uiState.selectedAppCount > 0
             )
 
-            // Estado del servicio de restricción
             StatusRow(
-                label = "Restriction service",
-                value = if (uiState.isAccessibilityServiceEnabled) {
-                    "Active"
-                } else {
-                    "Disabled"
-                },
+                label = "Servicio de bloqueo",
+                value = if (uiState.isAccessibilityServiceEnabled) "Activo" else "Deshabilitado",
                 isPositive = uiState.isAccessibilityServiceEnabled
             )
 
-            // Resumen del estado de preparación
             SessionReadinessBadge(
                 message = uiState.sessionReadinessMessage,
-                isReady = uiState.canStartRestrictedSession
+                isReady = uiState.canStartTimerOnly
             )
         }
     }
 }
 
-/**
- * Fila de estado con ícono de verificación y etiqueta de valor.
- */
 @Composable
 private fun StatusRow(
     label: String,
@@ -328,9 +415,6 @@ private fun StatusRow(
     }
 }
 
-/**
- * Badge que muestra el estado de preparación de la sesión.
- */
 @Composable
 private fun SessionReadinessBadge(
     message: String,
@@ -355,7 +439,7 @@ private fun SessionReadinessBadge(
         ) { msg ->
             Text(
                 text = msg,
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
                 color = textColor,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
                 textAlign = TextAlign.Center
@@ -364,51 +448,6 @@ private fun SessionReadinessBadge(
     }
 }
 
-/**
- * Sección del selector de duración con etiqueta.
- */
-@Composable
-private fun DurationSection(
-    uiState: HomeUiState,
-    onDurationSelected: (Int) -> Unit
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "Focus Duration",
-                style = MaterialTheme.typography.titleMedium,
-                color = FocusOnSurface
-            )
-            AnimatedContent(
-                targetState = uiState.selectedDurationMinutes,
-                transitionSpec = {
-                    fadeIn(tween(150)) togetherWith fadeOut(tween(150))
-                },
-                label = "DurationSection_selected"
-            ) { minutes ->
-                Text(
-                    text = formatDuration(minutes),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = FocusAccentLight
-                )
-            }
-        }
-
-        FocusDurationSelector(
-            selectedMinutes = uiState.selectedDurationMinutes,
-            options = uiState.durationOptions,
-            onOptionSelected = onDurationSelected
-        )
-    }
-}
-
-/**
- * Sección de botones de acción: Iniciar sesión y Seleccionar apps.
- */
 @Composable
 private fun ActionSection(
     uiState: HomeUiState,
@@ -417,25 +456,22 @@ private fun ActionSection(
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         FocusPrimaryButton(
-            text = "Start Focus Session",
+            text = "Iniciar en Celular y Smartwatch",
             onClick = onStartSession,
             enabled = uiState.canStartTimerOnly
         )
 
         FocusSecondaryButton(
             text = if (uiState.selectedAppCount == 0) {
-                "Select Apps to Restrict"
+                "Elegir Apps a Bloquear"
             } else {
-                "Apps Selected (${uiState.selectedAppCount})"
+                "Apps Bloqueadas (${uiState.selectedAppCount})"
             },
             onClick = onNavigateToAppSelection
         )
     }
 }
 
-/**
- * Tarjeta de advertencia de accesibilidad mostrada cuando el servicio está deshabilitado.
- */
 @Composable
 private fun AccessibilityWarningCard() {
     Surface(
@@ -456,7 +492,7 @@ private fun AccessibilityWarningCard() {
                 modifier = Modifier.size(20.dp)
             )
             Text(
-                text = "The accessibility service is disabled. The timer will run, but apps won't be restricted. Enable it in Settings.",
+                text = "El servicio de accesibilidad está inactivo. El reloj y el temporizador funcionarán, pero no se bloquearán apps en el celular. Actívalo en Ajustes.",
                 style = MaterialTheme.typography.bodySmall,
                 color = FocusWarning
             )
@@ -464,14 +500,11 @@ private fun AccessibilityWarningCard() {
     }
 }
 
-/**
- * Formatea los minutos en una cadena legible para el encabezado de la sección.
- */
 private fun formatDuration(minutes: Int): String {
     return when {
-        minutes < 60 -> "$minutes min"
-        minutes == 60 -> "1 hour"
-        minutes % 60 == 0 -> "${minutes / 60} hours"
+        minutes < 60 -> "$minutes minutos"
+        minutes == 60 -> "1 hora"
+        minutes % 60 == 0 -> "${minutes / 60} horas"
         else -> "${minutes / 60}h ${minutes % 60}m"
     }
 }

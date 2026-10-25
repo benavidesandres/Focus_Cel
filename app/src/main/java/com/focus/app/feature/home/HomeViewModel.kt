@@ -3,11 +3,13 @@ package com.focus.app.feature.home
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.focus.app.domain.model.FocusActivityType
 import com.focus.app.domain.usecase.GetRestrictionStatusUseCase
 import com.focus.app.domain.usecase.ObserveFocusSessionUseCase
 import com.focus.app.domain.usecase.SaveSelectedAppsUseCase
 import com.focus.app.domain.usecase.StartFocusSessionUseCase
 import com.focus.app.platform.accessibility.FocusAccessibilityService
+import com.focus.app.platform.smartwatch.SmartwatchSyncManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -19,9 +21,8 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /**
- * ViewModel de la pantalla principal de Focus.
- * Coordina la selección de apps, la duración y el estado del servicio de accesibilidad.
- * Todos los efectos secundarios ocurren aquí, nunca en los composables.
+ * ViewModel de la pantalla principal de Focus adaptada para Smartwatch Companion.
+ * Coordina la actividad "¿Qué vas a hacer?", la duración, las apps y la sincronización con el reloj.
  */
 @HiltViewModel
 class HomeViewModel @Inject constructor(
@@ -29,27 +30,22 @@ class HomeViewModel @Inject constructor(
     private val observeSession: ObserveFocusSessionUseCase,
     private val startSession: StartFocusSessionUseCase,
     private val saveSelectedApps: SaveSelectedAppsUseCase,
-    private val restrictionStatus: GetRestrictionStatusUseCase
+    private val restrictionStatus: GetRestrictionStatusUseCase,
+    val smartwatchSyncManager: SmartwatchSyncManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HomeUiState())
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
 
-    // Eventos de un solo uso para navegación (no se mezclan en el estado de UI)
     private val _navigateToSession = MutableStateFlow(false)
     val navigateToSession: StateFlow<Boolean> = _navigateToSession.asStateFlow()
 
     init {
-        // Combina todos los flujos relevantes en el estado de UI
         observeState()
-        // Reconcilia la sesión persistida al iniciar
+        observeSmartwatch()
         reconcileSession()
     }
 
-    /**
-     * Combina los flujos de apps seleccionadas, duración preferida y sesión activa
-     * en un único estado de UI actualizado reactivamente.
-     */
     private fun observeState() {
         viewModelScope.launch {
             combine(
@@ -62,8 +58,9 @@ class HomeViewModel @Inject constructor(
                 _uiState.update { current ->
                     current.copy(
                         selectedAppCount = selectedPackages.size,
-                        selectedDurationMinutes = preferredDuration,
+                        selectedDurationMinutes = if (preferredDuration > 0) preferredDuration else 45,
                         activeSessionStatus = activeSession?.status,
+                        selectedActivity = activeSession?.activityType ?: current.selectedActivity,
                         isLoading = false
                     )
                 }
@@ -71,44 +68,54 @@ class HomeViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Reconcilia la sesión persistida al iniciar el ViewModel.
-     * Si la sesión expiró, la limpia. Si sigue activa, navega a la pantalla de sesión.
-     */
+    private fun observeSmartwatch() {
+        viewModelScope.launch {
+            smartwatchSyncManager.connectedWatch.collect { watch ->
+                _uiState.update { it.copy(smartwatchDevice = watch) }
+            }
+        }
+    }
+
     private fun reconcileSession() {
         viewModelScope.launch {
             observeSession.reconcileOnStartup(
                 nowMs = System.currentTimeMillis(),
-                endOnExpiry = { _ ->
-                    // La sesión expiró; el clearActiveSession ya fue llamado en el use case
-                }
+                endOnExpiry = { _ -> }
             )
         }
     }
 
-    /**
-     * Verifica el estado del servicio de accesibilidad.
-     * Debe llamarse en onResume para reflejar cambios hechos en Ajustes.
-     */
     fun checkAccessibilityService() {
         val isEnabled = FocusAccessibilityService.isServiceEnabled(context)
         _uiState.update { it.copy(isAccessibilityServiceEnabled = isEnabled) }
     }
 
     /**
-     * Actualiza la duración de sesión seleccionada y la persiste.
-     *
-     * @param minutes La nueva duración en minutos.
+     * Selección de actividad: [ Estudiar ] [ Trabajar ] [ Leer ].
+     */
+    fun onActivitySelected(activity: FocusActivityType) {
+        _uiState.update { it.copy(selectedActivity = activity) }
+    }
+
+    /**
+     * Actualiza la duración en minutos (ej. 45 min).
      */
     fun onDurationSelected(minutes: Int) {
         viewModelScope.launch {
+            _uiState.update { it.copy(selectedDurationMinutes = minutes) }
             restrictionStatus.savePreferredDuration(minutes)
         }
     }
 
     /**
-     * Inicia una nueva sesión de enfoque con la configuración actual.
-     * Si la validación falla, muestra un error en lugar de iniciar.
+     * Prueba la vibración del smartwatch.
+     */
+    fun onTestSmartwatchVibration() {
+        smartwatchSyncManager.testHapticVibration()
+    }
+
+    /**
+     * Inicia la sesión sincronizada en el teléfono y en el smartwatch.
      */
     fun onStartSession() {
         viewModelScope.launch {
@@ -117,12 +124,18 @@ class HomeViewModel @Inject constructor(
 
             val result = startSession(
                 durationMinutes = currentState.selectedDurationMinutes,
-                selectedPackageNames = selectedPackages
+                selectedPackageNames = selectedPackages,
+                activityType = currentState.selectedActivity
             )
 
             result.fold(
-                onSuccess = {
-                    // Navega a la pantalla de sesión activa
+                onSuccess = { session ->
+                    // Sincroniza el inicio en el smartwatch
+                    smartwatchSyncManager.notifySessionStarted(
+                        activityType = session.activityType,
+                        durationMinutes = session.durationMinutes,
+                        totalMillis = session.durationMinutes * 60_000L
+                    )
                     _navigateToSession.value = true
                 },
                 onFailure = { error ->
@@ -132,12 +145,10 @@ class HomeViewModel @Inject constructor(
         }
     }
 
-    /** Consume el evento de navegación a sesión después de procesarlo. */
     fun onNavigatedToSession() {
         _navigateToSession.value = false
     }
 
-    /** Limpia el mensaje de error actual. */
     fun clearError() {
         _uiState.update { it.copy(errorMessage = null) }
     }
