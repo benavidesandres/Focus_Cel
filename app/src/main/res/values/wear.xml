@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Declaración de capacidades de la aplicación móvil de Focus para Wear OS.
+    Permite que el reloj inteligente real descubra este teléfono mediante CapabilityClient.
+-->
+<resources>
+    <string-array name="android_wear_capabilities">
+        <item>focus_phone_app</item>
+    </string-array>
+</resources>
