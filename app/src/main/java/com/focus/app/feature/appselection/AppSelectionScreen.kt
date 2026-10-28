@@ -190,7 +190,7 @@ fun AppSelectionScreen(
                                 FocusAppListItem(
                                     appName = app.displayName,
                                     packageName = app.packageName,
-                                    icon = app.iconDrawable,
+                                    icon = app.icon,
                                     isSelected = isSelected,
                                     onClick = { viewModel.onToggleAppSelection(app.packageName) }
                                 )
