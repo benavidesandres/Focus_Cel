@@ -18,13 +18,16 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.DirectionsWalk
 import androidx.compose.material.icons.rounded.BatteryFull
+import androidx.compose.material.icons.rounded.BluetoothConnected
 import androidx.compose.material.icons.rounded.CheckCircle
-import androidx.compose.material.icons.rounded.DirectionsWalk
 import androidx.compose.material.icons.rounded.NotificationsOff
+import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Vibration
 import androidx.compose.material.icons.rounded.Watch
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -33,7 +36,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -51,14 +53,15 @@ import com.focus.app.domain.model.SmartwatchDevice
 
 /**
  * Tarjeta informativa del Smartwatch conectado (Wear OS Companion).
- * Muestra el estado del reloj, nivel de batería y las protecciones activas.
+ * Muestra el estado del reloj real, nivel de batería, protecciones activas y botón de escaneo.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun SmartwatchStatusCard(
     device: SmartwatchDevice,
     onTestVibration: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onScanForWatch: (() -> Unit)? = null
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
@@ -72,7 +75,7 @@ fun SmartwatchStatusCard(
                 .padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            // Fila superior: Ícono de Reloj + Nombre del Smartwatch + Batería
+            // Fila superior: Ícono de Reloj + Nombre del Smartwatch + Batería + Botón de escaneo
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -80,19 +83,20 @@ fun SmartwatchStatusCard(
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.weight(1f)
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(40.dp)
+                            .size(42.dp)
                             .clip(CircleShape)
-                            .background(FocusAccentSubtle),
+                            .background(if (device.isRealHardware) FocusSuccessSubtle else FocusAccentSubtle),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = Icons.Rounded.Watch,
+                            imageVector = if (device.isRealHardware) Icons.Rounded.BluetoothConnected else Icons.Rounded.Watch,
                             contentDescription = "Smartwatch",
-                            tint = FocusAccent,
+                            tint = if (device.isRealHardware) FocusSuccess else FocusAccent,
                             modifier = Modifier.size(24.dp)
                         )
                     }
@@ -107,49 +111,71 @@ fun SmartwatchStatusCard(
                                 style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
                                 color = FocusOnSurface
                             )
-                            Icon(
-                                imageVector = Icons.Rounded.CheckCircle,
-                                contentDescription = "Conectado",
-                                tint = FocusSuccess,
-                                modifier = Modifier.size(16.dp)
-                            )
+                            if (device.isConnected) {
+                                Icon(
+                                    imageVector = Icons.Rounded.CheckCircle,
+                                    contentDescription = "Conectado",
+                                    tint = FocusSuccess,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
                         }
                         Text(
                             text = device.connectionLabel,
                             style = MaterialTheme.typography.bodySmall,
-                            color = FocusOnSurfaceVariant
+                            color = if (device.isRealHardware) FocusSuccess else FocusOnSurfaceVariant
                         )
                     }
                 }
 
-                // Píldora de batería
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = FocusSuccessSubtle,
-                    border = BorderStroke(1.dp, FocusSuccess.copy(alpha = 0.3f))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    // Píldora de batería
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = FocusSuccessSubtle,
+                        border = BorderStroke(1.dp, FocusSuccess.copy(alpha = 0.3f))
                     ) {
-                        Icon(
-                            imageVector = Icons.Rounded.BatteryFull,
-                            contentDescription = "Batería",
-                            tint = FocusSuccess,
-                            modifier = Modifier.size(14.dp)
-                        )
-                        Text(
-                            text = device.batteryStatusLabel,
-                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                            color = FocusSuccess
-                        )
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.BatteryFull,
+                                contentDescription = "Batería",
+                                tint = FocusSuccess,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Text(
+                                text = device.batteryStatusLabel,
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                color = FocusSuccess
+                            )
+                        }
+                    }
+
+                    // Botón para re-escanear o buscar reloj físico
+                    if (onScanForWatch != null) {
+                        IconButton(
+                            onClick = onScanForWatch,
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Refresh,
+                                contentDescription = "Buscar reloj real",
+                                tint = FocusAccentLight,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
                     }
                 }
             }
 
             // Chips con las protecciones que el reloj ejecuta:
-            // Bloquea distracciones, Muestra progreso, Utiliza vibraciones, Detecta inactividad
+            // Bloquea distracciones, Vibraciones hápticas, Detecta inactividad
             FlowRow(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -164,7 +190,7 @@ fun SmartwatchStatusCard(
                     label = "Vibraciones hápticas"
                 )
                 ProtectionFeatureChip(
-                    icon = Icons.Rounded.DirectionsWalk,
+                    icon = Icons.AutoMirrored.Rounded.DirectionsWalk,
                     label = "Detecta inactividad"
                 )
             }
@@ -176,7 +202,11 @@ fun SmartwatchStatusCard(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
-                    text = "El reloj vibrará al iniciar, descansar y si no te mueves.",
+                    text = if (device.isRealHardware) {
+                        "Reloj real conectado. Las vibraciones y alertas se envían a tu muñeca."
+                    } else {
+                        "El reloj vibrará al iniciar, descansar y si no te mueves."
+                    },
                     style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
                     color = FocusOnSurfaceVariant,
                     modifier = Modifier.weight(1f)
