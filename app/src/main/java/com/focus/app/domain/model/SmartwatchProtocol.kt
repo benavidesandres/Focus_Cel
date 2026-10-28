@@ -5,6 +5,10 @@ package com.focus.app.domain.model
  * y el Smartwatch a través de la Wearable Data Layer API.
  */
 object SmartwatchProtocol {
+    // Capacidades declaradas para descubrimiento bidireccional (CapabilityClient)
+    const val CAPABILITY_WEAR_APP = "focus_wear_app"
+    const val CAPABILITY_PHONE_APP = "focus_phone_app"
+
     // Rutas para intercambio de mensajes (MessageClient)
     const val PATH_START_SESSION = "/focus/session/start"
     const val PATH_STOP_SESSION = "/focus/session/stop"
@@ -15,6 +19,11 @@ object SmartwatchProtocol {
     const val PATH_REST_ALERT = "/focus/smartwatch/rest_alert"
     const val PATH_HAPTIC_TRIGGER = "/focus/smartwatch/haptic"
     const val PATH_DEVICE_STATUS = "/focus/smartwatch/status"
+    const val PATH_BATTERY = "/focus/smartwatch/battery"
+    const val PATH_ACCELEROMETER_EVENT = "/focus/smartwatch/movement"
+    const val PATH_DISMISS_ALERT = "/focus/smartwatch/dismiss_alert"
+    const val PATH_PING = "/focus/smartwatch/ping"
+    const val PATH_PONG = "/focus/smartwatch/pong"
 
     // Rutas de sincronización continua de datos (DataClient)
     const val DATA_PATH_ACTIVE_SESSION = "/focus/data/active_session"
