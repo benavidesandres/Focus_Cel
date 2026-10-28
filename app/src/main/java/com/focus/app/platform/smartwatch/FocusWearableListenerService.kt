@@ -1,6 +1,6 @@
 package com.focus.app.platform.smartwatch
 
-import com.focus.app.domain.model.SmartwatchProtocol
+import com.google.android.gms.wearable.CapabilityInfo
 import com.google.android.gms.wearable.MessageEvent
 import com.google.android.gms.wearable.Node
 import com.google.android.gms.wearable.WearableListenerService
@@ -10,8 +10,9 @@ import javax.inject.Inject
 /**
  * Servicio de escucha en segundo plano para eventos provenientes del Smartwatch (Wear OS).
  *
- * Recibe eventos cuando el usuario interactúa directamente con el reloj
- * o cuando los sensores de movimiento del reloj detectan patrones.
+ * Recibe eventos cuando el usuario interactúa directamente con el reloj,
+ * cuando los sensores de movimiento del reloj detectan patrones,
+ * o cuando el estado de conexión del reloj físico cambia.
  */
 @AndroidEntryPoint
 class FocusWearableListenerService : WearableListenerService() {
@@ -20,19 +21,11 @@ class FocusWearableListenerService : WearableListenerService() {
     lateinit var syncManager: SmartwatchSyncManager
 
     override fun onMessageReceived(messageEvent: MessageEvent) {
-        when (messageEvent.path) {
-            SmartwatchProtocol.PATH_INACTIVITY_ALERT -> {
-                // El sensor del smartwatch detectó inmovilidad prolongada
-                syncManager.notifyInactivityDetected()
-            }
-            SmartwatchProtocol.PATH_STOP_SESSION -> {
-                // El usuario finalizó la sesión desde el reloj
-                syncManager.notifySessionStopped()
-            }
-            SmartwatchProtocol.PATH_DEVICE_STATUS -> {
-                syncManager.checkConnectedNodes()
-            }
-        }
+        syncManager.processIncomingMessage(messageEvent.path, messageEvent.data)
+    }
+
+    override fun onCapabilityChanged(capabilityInfo: CapabilityInfo) {
+        syncManager.checkConnectedNodes()
     }
 
     override fun onPeerConnected(peer: Node) {
