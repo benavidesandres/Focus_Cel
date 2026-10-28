@@ -7,5 +7,5 @@
     </style>
 
     <!-- Tema principal de la aplicación — Compose gestiona el resto -->
-    <style name="Theme.Focus" parent="Theme.Material3.DayNight.NoActionBar" />
+    <style name="Theme.Focus" parent="android:Theme.Material.NoActionBar" />
 </resources>
