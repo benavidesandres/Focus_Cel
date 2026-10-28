@@ -63,23 +63,6 @@ fun FocusDurationSelector(
     }
 }
 
-/**
- * Sobrecarga de compatibilidad para llamadas con nombres de parámetros alternativos.
- */
-@Composable
-fun FocusDurationSelector(
-    selectedDurationMinutes: Int,
-    options: List<Int> = listOf(25, 45, 60, 90),
-    onDurationSelected: (Int) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    FocusDurationSelector(
-        selectedMinutes = selectedDurationMinutes,
-        options = options,
-        onOptionSelected = onDurationSelected,
-        modifier = modifier
-    )
-}
 
 /**
  * Chip individual de duración.
