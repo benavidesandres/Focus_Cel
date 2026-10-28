@@ -115,6 +115,13 @@ class HomeViewModel @Inject constructor(
     }
 
     /**
+     * Escanea activamente en busca de relojes físicos Wear OS conectados por Bluetooth o Wi-Fi.
+     */
+    fun onScanForRealWatch() {
+        smartwatchSyncManager.checkConnectedNodes()
+    }
+
+    /**
      * Inicia la sesión sincronizada en el teléfono y en el smartwatch.
      */
     fun onStartSession() {

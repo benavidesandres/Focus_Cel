@@ -110,6 +110,7 @@ fun HomeScreen(
         onActivitySelected = viewModel::onActivitySelected,
         onDurationSelected = viewModel::onDurationSelected,
         onTestSmartwatchVibration = viewModel::onTestSmartwatchVibration,
+        onScanForWatch = viewModel::onScanForRealWatch,
         onStartSession = viewModel::onStartSession,
         onNavigateToAppSelection = onNavigateToAppSelection,
         onNavigateToSettings = onNavigateToSettings
@@ -122,6 +123,7 @@ private fun HomeScreenContent(
     onActivitySelected: (FocusActivityType) -> Unit,
     onDurationSelected: (Int) -> Unit,
     onTestSmartwatchVibration: () -> Unit,
+    onScanForWatch: () -> Unit,
     onStartSession: () -> Unit,
     onNavigateToAppSelection: () -> Unit,
     onNavigateToSettings: () -> Unit
@@ -168,7 +170,8 @@ private fun HomeScreenContent(
             // ── Tarjeta de Estado del Smartwatch ────────────────────────────
             SmartwatchStatusCard(
                 device = uiState.smartwatchDevice,
-                onTestVibration = onTestSmartwatchVibration
+                onTestVibration = onTestSmartwatchVibration,
+                onScanForWatch = onScanForWatch
             )
 
             Spacer(modifier = Modifier.height(24.dp))
