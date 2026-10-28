@@ -26,9 +26,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.DirectionsWalk
 import androidx.compose.material.icons.rounded.AutoStories
 import androidx.compose.material.icons.rounded.CheckCircle
-import androidx.compose.material.icons.rounded.DirectionsWalk
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.School
 import androidx.compose.material.icons.rounded.SelfImprovement
@@ -330,7 +330,7 @@ private fun SedentarismAlertCard(
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = Icons.Rounded.DirectionsWalk,
+                        imageVector = Icons.AutoMirrored.Rounded.DirectionsWalk,
                         contentDescription = null,
                         tint = FocusWarning,
                         modifier = Modifier.size(20.dp)

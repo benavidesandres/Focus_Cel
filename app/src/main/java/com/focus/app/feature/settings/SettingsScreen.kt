@@ -24,7 +24,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.CheckCircle
-import androidx.compose.material.icons.rounded.DirectionsWalk
+import androidx.compose.material.icons.automirrored.rounded.DirectionsWalk
 import androidx.compose.material.icons.rounded.PrivacyTip
 import androidx.compose.material.icons.rounded.SelfImprovement
 import androidx.compose.material.icons.rounded.Vibration
@@ -251,7 +251,7 @@ private fun SmartwatchSettingsSection(
                 // Opción: Detección de inactividad física
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     SettingSwitchRow(
-                        icon = Icons.Rounded.DirectionsWalk,
+                        icon = Icons.AutoMirrored.Rounded.DirectionsWalk,
                         title = "Detección de inactividad",
                         description = "Detecta que llevas mucho tiempo sin moverte y te avisa para estirarte.",
                         checked = uiState.isSmartwatchSedentarismEnabled,
