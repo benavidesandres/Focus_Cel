@@ -49,21 +49,30 @@ class SettingsViewModel @Inject constructor(
 
     private fun observePreferences() {
         viewModelScope.launch {
-            combine(
+            val phonePrefsFlow = combine(
                 restrictionStatus.preferredDurationMinutes,
-                saveSelectedApps.selectedPackageNames,
+                saveSelectedApps.selectedPackageNames
+            ) { duration, packages ->
+                Pair(if (duration > 0) duration else 45, packages.size)
+            }
+
+            val watchPrefsFlow = combine(
                 preferencesDataSource.smartwatchHapticEnabled,
                 preferencesDataSource.smartwatchSedentarismEnabled,
                 preferencesDataSource.smartwatchSedentarismThresholdMinutes,
                 preferencesDataSource.smartwatchRestIndicatorEnabled
-            ) { duration, packages, haptic, sedentarism, threshold, restIndicator ->
+            ) { haptic, sedentarism, threshold, restIndicator ->
+                WatchPreferences(haptic, sedentarism, threshold, restIndicator)
+            }
+
+            combine(phonePrefsFlow, watchPrefsFlow) { (duration, packageCount), watch ->
                 SettingsData(
-                    duration = if (duration > 0) duration else 45,
-                    packageCount = packages.size,
-                    haptic = haptic,
-                    sedentarism = sedentarism,
-                    threshold = threshold,
-                    restIndicator = restIndicator
+                    duration = duration,
+                    packageCount = packageCount,
+                    haptic = watch.haptic,
+                    sedentarism = watch.sedentarism,
+                    threshold = watch.threshold,
+                    restIndicator = watch.restIndicator
                 )
             }.collect { data ->
                 _uiState.update {
@@ -127,6 +136,13 @@ class SettingsViewModel @Inject constructor(
             preferencesDataSource.setSmartwatchRestIndicatorEnabled(enabled)
         }
     }
+
+    private data class WatchPreferences(
+        val haptic: Boolean,
+        val sedentarism: Boolean,
+        val threshold: Int,
+        val restIndicator: Boolean
+    )
 
     private data class SettingsData(
         val duration: Int,
