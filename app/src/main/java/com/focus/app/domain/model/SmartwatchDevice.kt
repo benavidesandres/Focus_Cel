@@ -24,16 +24,23 @@ data class SmartwatchDevice(
     val sedentarismAlertEnabled: Boolean = true,
     val sedentarismThresholdMinutes: Int = 45,
     val lastSyncTimestampMs: Long = System.currentTimeMillis(),
-    val isSimulated: Boolean = false
+    val isSimulated: Boolean = false,
+    val isNearby: Boolean = true,
+    val hasWearApp: Boolean = true
 ) {
     val batteryStatusLabel: String
         get() = "$batteryPercent%"
 
+    val isRealHardware: Boolean
+        get() = isConnected && !isSimulated
+
     val connectionLabel: String
         get() = when {
             !isConnected -> "Desconectado"
-            isSimulated -> "Simulación Companion Activa"
-            else -> "Conectado vía Wear OS"
+            isSimulated -> "Simulación Companion"
+            !hasWearApp -> "Reloj emparejado (sin app Focus Wear)"
+            isNearby -> "Conectado vía Bluetooth"
+            else -> "Conectado vía Wi-Fi / Nube"
         }
 }
 
