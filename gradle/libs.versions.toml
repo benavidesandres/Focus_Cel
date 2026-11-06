@@ -39,6 +39,7 @@ espressoCore = "3.6.1"
 coroutinesTest = "1.8.1"
 mockk = "1.13.12"
 archCoreTesting = "2.2.0"
+json = "20240303"
 
 [libraries]
 # AndroidX Core
@@ -88,6 +89,7 @@ androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-co
 kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "coroutinesTest" }
 mockk = { group = "io.mockk", name = "mockk", version.ref = "mockk" }
 androidx-arch-core-testing = { group = "androidx.arch.core", name = "core-testing", version.ref = "archCoreTesting" }
+json = { group = "org.json", name = "json", version.ref = "json" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

@@ -7,17 +7,22 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <!--
-        QUERY_ALL_PACKAGES: Necesario para enumerar todas las aplicaciones lanzables
-        instaladas en el dispositivo y mostrarlas en la pantalla de selección.
-        Implicación de distribución: Google Play requiere justificación en el formulario
-        de declaración de permisos. Este permiso se usa exclusivamente para mostrar
-        al usuario sus aplicaciones instaladas y nunca se transmite a servidores externos.
+        Visibilidad de paquetes (Android 11+): declara solo lo necesario para listar las apps
+        lanzables y detectar el launcher y el marcador, sin el permiso sensible QUERY_ALL_PACKAGES.
     -->
-    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"
-        tools:ignore="QueryAllPackagesPermission" />
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.HOME" />
+        </intent>
+    </queries>
 
     <!--
-        FOREGROUND_SERVICE: Requerido para mantener el servicio de sesión activo
+        FOREGROUND_SERVICE: Requerido para mantener la sesión activa
         cuando la aplicación está en segundo plano.
     -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
@@ -38,13 +43,6 @@
         RECEIVE_BOOT_COMPLETED: Permite reconciliar sesiones activas tras reinicio.
     -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-
-    <!-- Permisos para comunicación con Smartwatch (Wear OS) y accesorios conectados -->
-    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
-
-    <!-- Declaración de compatibilidad con Smartwatches físicos Wear OS -->
-    <uses-feature android:name="android.hardware.type.watch" android:required="false" />
 
     <application
         android:name=".app.FocusApplication"
@@ -80,7 +78,21 @@
             android:theme="@style/Theme.Focus"
             android:excludeFromRecents="true"
             android:launchMode="singleTop"
-            android:noHistory="true" />
+            android:noHistory="true"
+            android:taskAffinity="" />
+
+        <!--
+            Servicio en primer plano que mantiene viva la sesión con la app cerrada.
+            Usa specialUse porque un temporizador de enfoque no encaja en los tipos estándar.
+        -->
+        <service
+            android:name=".platform.session.FocusSessionService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Keeps a user-started focus session running: countdown, app blocking and smartwatch sync." />
+        </service>
 
         <!--
             Servicio de accesibilidad para detectar aplicaciones en primer plano
@@ -104,35 +116,30 @@
         <service
             android:name=".platform.smartwatch.FocusWearableListenerService"
             android:exported="true">
-            <!-- 1. Intercambio de mensajes y sincronización de datos -->
+            <!-- Mensajes enviados por la app del reloj -->
             <intent-filter>
                 <action android:name="com.google.android.gms.wearable.MESSAGE_RECEIVED" />
-                <action android:name="com.google.android.gms.wearable.DATA_CHANGED" />
                 <data
                     android:host="*"
                     android:pathPrefix="/focus"
                     android:scheme="wear" />
             </intent-filter>
-            <!-- 2. Detección de instalación y disponibilidad de la app en el reloj -->
+            <!-- Instalación y alcance de la app Focus en el reloj -->
             <intent-filter>
                 <action android:name="com.google.android.gms.wearable.CAPABILITY_CHANGED" />
                 <data
                     android:host="*"
+                    android:path="/focus_wear_app"
                     android:scheme="wear" />
-            </intent-filter>
-            <!-- 3. Conexión y desconexión física de nodos Wear OS (Bluetooth/WiFi) -->
-            <intent-filter>
-                <action android:name="com.google.android.gms.wearable.NODE_CHANGED" />
             </intent-filter>
         </service>
 
         <!-- Receptor para reconciliar sesiones tras reinicio del dispositivo -->
         <receiver
             android:name=".platform.receiver.BootCompletedReceiver"
-            android:exported="true">
+            android:exported="false">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
-                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
             </intent-filter>
         </receiver>
 

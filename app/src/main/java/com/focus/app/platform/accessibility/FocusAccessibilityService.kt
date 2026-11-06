@@ -7,14 +7,16 @@ import android.content.Intent
 import android.provider.Settings
 import android.text.TextUtils
 import android.view.accessibility.AccessibilityEvent
-import com.focus.app.domain.model.SessionStatus
-import com.focus.app.domain.repository.FocusSessionRepository
+import com.focus.app.domain.model.SessionPhase
+import com.focus.app.domain.session.FocusSessionManager
+import com.focus.app.platform.apps.ProtectedPackages
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -31,38 +33,46 @@ import javax.inject.Inject
  * - No se garantiza la restricción absoluta; es un mecanismo de mejor esfuerzo.
  * - El servicio NUNCA lee contenido de pantalla, contraseñas ni datos personales.
  *
- * EXCLUSIONES DE RESTRICCIÓN:
- * - La propia aplicación Focus (evita bucles infinitos).
- * - El launcher del dispositivo.
- * - Ajustes del sistema de Android.
- * - La pantalla de bloqueo de Focus.
- * - Llamadas de emergencia.
+ * EXCLUSIONES: ver [ProtectedPackages].
  */
 @AndroidEntryPoint
 class FocusAccessibilityService : AccessibilityService() {
 
     @Inject
-    lateinit var sessionRepository: FocusSessionRepository
+    lateinit var sessionManager: FocusSessionManager
+
+    @Inject
+    lateinit var protectedPackages: ProtectedPackages
 
     // Ámbito de coroutine del servicio — cancelado al destruir el servicio
-    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
-    // Nombre del paquete de la pantalla de bloqueo de Focus
-    private val restrictionActivityPackage = "com.focus.app"
-
-    // Paquetes que nunca deben ser restringidos
-    private val neverRestrictPackages = setOf(
-        "android",
-        "com.android.settings",
-        "com.android.systemui",
-        "com.android.phone",
-        "com.android.dialer",
-        restrictionActivityPackage
-    )
+    // Última app vista en primer plano, para bloquearla si la sesión empieza con ella abierta
+    private var foregroundPackage: String? = null
+    private var neverRestricted: Set<String> = emptySet()
 
     override fun onServiceConnected() {
         super.onServiceConnected()
-        // Servicio conectado y listo para detectar eventos de ventana
+        neverRestricted = protectedPackages.current()
+        observeSessionStart()
+    }
+
+    /**
+     * Una sesión iniciada desde el reloj puede comenzar con una app bloqueada ya abierta,
+     * caso en el que no llega ningún evento de ventana nuevo.
+     */
+    private fun observeSessionStart() {
+        serviceScope.launch {
+            sessionManager.phase
+                .map { phase -> (phase as? SessionPhase.Focusing)?.session?.id }
+                .distinctUntilChanged()
+                .collect { sessionId ->
+                    if (sessionId != null) {
+                        neverRestricted = protectedPackages.current()
+                        foregroundPackage?.let(::restrictIfNeeded)
+                    }
+                }
+        }
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
@@ -70,27 +80,17 @@ class FocusAccessibilityService : AccessibilityService() {
         if (event?.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
 
         val packageName = event.packageName?.toString() ?: return
-        val className = event.className?.toString() ?: return
 
-        // Ignora paquetes del sistema y la propia app Focus
-        if (packageName in neverRestrictPackages) return
+        // La barra de estado y el panel rápido se superponen sin cambiar la app en primer plano
+        if (packageName == SYSTEM_UI_PACKAGE) return
 
-        // Verifica si hay una sesión activa y si el paquete está restringido
-        serviceScope.launch {
-            val session = sessionRepository.activeSession.firstOrNull() ?: return@launch
+        foregroundPackage = packageName
+        restrictIfNeeded(packageName)
+    }
 
-            // Solo actúa si la sesión está activa
-            if (session.status != SessionStatus.ACTIVE) return@launch
-
-            // Verifica si el tiempo de sesión ya expiró
-            val nowMs = System.currentTimeMillis()
-            if (session.isExpired(nowMs)) return@launch
-
-            // Verifica si el paquete en primer plano está en la lista de restringidos
-            if (packageName !in session.selectedPackageNames) return@launch
-
-            // Lanza la actividad de bloqueo de Focus
-            launchRestrictionScreen(packageName, session.id)
+    private fun restrictIfNeeded(packageName: String) {
+        if (packageName !in neverRestricted && sessionManager.isRestricted(packageName)) {
+            launchRestrictionScreen(packageName)
         }
     }
 
@@ -98,13 +98,11 @@ class FocusAccessibilityService : AccessibilityService() {
      * Lanza la pantalla de restricción de Focus cuando se detecta una app bloqueada.
      *
      * @param blockedPackage El paquete que intentó pasar al primer plano.
-     * @param sessionId ID de la sesión activa para mostrar información contextual.
      */
-    private fun launchRestrictionScreen(blockedPackage: String, sessionId: Long) {
+    private fun launchRestrictionScreen(blockedPackage: String) {
         val intent = Intent(this, RestrictionActivity::class.java).apply {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
             putExtra(RestrictionActivity.EXTRA_BLOCKED_PACKAGE, blockedPackage)
-            putExtra(RestrictionActivity.EXTRA_SESSION_ID, sessionId)
         }
         startActivity(intent)
     }
@@ -114,12 +112,13 @@ class FocusAccessibilityService : AccessibilityService() {
     }
 
     override fun onDestroy() {
-        super.onDestroy()
-        // Cancela todas las coroutines al destruir el servicio
         serviceScope.cancel()
+        super.onDestroy()
     }
 
     companion object {
+        private const val SYSTEM_UI_PACKAGE = "com.android.systemui"
+
         /**
          * Verifica si el servicio de accesibilidad de Focus está habilitado.
          * Comprueba el ajuste del sistema, no solo el estado del proceso.
@@ -138,8 +137,7 @@ class FocusAccessibilityService : AccessibilityService() {
             colonSplitter.setString(enabledServicesString)
 
             return colonSplitter.any { service ->
-                val componentName = ComponentName.unflattenFromString(service)
-                componentName?.equals(expectedComponentName) == true
+                ComponentName.unflattenFromString(service) == expectedComponentName
             }
         }
 

@@ -11,6 +11,7 @@ package com.focus.app.domain.model
  * @param durationMinutes Duración configurada de la sesión en minutos.
  * @param selectedPackageNames Conjunto de paquetes seleccionados para restricción.
  * @param status Estado actual del ciclo de vida de la sesión.
+ * @param activityType Actividad elegida por el usuario para esta sesión.
  */
 data class FocusSession(
     val id: Long,
@@ -19,12 +20,12 @@ data class FocusSession(
     val durationMinutes: Int,
     val selectedPackageNames: Set<String>,
     val status: SessionStatus,
-    val activityType: FocusActivityType = FocusActivityType.TRABAJAR,
-    val isSmartwatchSynced: Boolean = true,
-    val isSedentaryAlertActive: Boolean = false,
-    val isBreakActive: Boolean = false,
-    val breakDurationMinutes: Int = 5
+    val activityType: FocusActivityType = FocusActivityType.WORK
 ) {
+    /** Minutos de descanso guiado que corresponden a esta sesión. */
+    val breakDurationMinutes: Int
+        get() = activityType.recommendedRestMinutes
+
     /**
      * Calcula los milisegundos restantes basándose en el timestamp actual.
      * Siempre no negativo; devuelve 0 si la sesión ya expiró.

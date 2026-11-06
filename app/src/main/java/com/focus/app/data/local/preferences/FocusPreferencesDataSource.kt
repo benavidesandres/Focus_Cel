@@ -2,12 +2,16 @@ package com.focus.app.data.local.preferences
 
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
+import com.focus.app.domain.model.FocusActivityType
+import com.focus.app.domain.model.SmartwatchSettings
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
@@ -41,10 +45,10 @@ class FocusPreferencesDataSource @Inject constructor(
         private val KEY_SESSION_ACTIVITY = stringPreferencesKey("active_session_activity")
 
         // Preferencias de Smartwatch (Wear OS)
-        private val KEY_SMARTWATCH_HAPTIC = androidx.datastore.preferences.core.booleanPreferencesKey("smartwatch_haptic_enabled")
-        private val KEY_SMARTWATCH_SEDENTARISM = androidx.datastore.preferences.core.booleanPreferencesKey("smartwatch_sedentarism_enabled")
-        private val KEY_SMARTWATCH_SEDENTARISM_THRESHOLD = intPreferencesKey("smartwatch_sedentarism_threshold_min")
-        private val KEY_SMARTWATCH_REST_INDICATOR = androidx.datastore.preferences.core.booleanPreferencesKey("smartwatch_rest_indicator_enabled")
+        private val KEY_WATCH_HAPTICS = booleanPreferencesKey("smartwatch_haptics_enabled")
+        private val KEY_WATCH_INACTIVITY = booleanPreferencesKey("smartwatch_inactivity_enabled")
+        private val KEY_WATCH_INACTIVITY_THRESHOLD = intPreferencesKey("smartwatch_inactivity_threshold_min")
+        private val KEY_WATCH_REST_INDICATOR = booleanPreferencesKey("smartwatch_rest_indicator_enabled")
 
         // Valor por defecto de duración (45 minutos según especificación)
         const val DEFAULT_DURATION_MINUTES = 45
@@ -94,7 +98,7 @@ class FocusPreferencesDataSource @Inject constructor(
         durationMinutes: Int,
         packageNames: Set<String>,
         status: String,
-        activityType: String = "TRABAJAR"
+        activityType: String
     ) {
         dataStore.edit { prefs ->
             prefs[KEY_SESSION_ID] = id
@@ -118,23 +122,28 @@ class FocusPreferencesDataSource @Inject constructor(
         }
     }
 
+    /** Flujo de la sesión activa almacenada; emite null si no hay ninguna. */
+    val activeSession: Flow<SessionSnapshot?> = dataStore.data
+        .map(::toSessionSnapshot)
+        .distinctUntilChanged()
+
     /**
      * Lee los metadatos de la sesión activa almacenada.
-     * Devuelve null si no existe ninguna sesión persistida.
      *
-     * @return Mapa de preferencias o null si no hay sesión.
+     * @return La instantánea, o null si no hay sesión.
      */
-    suspend fun loadActiveSession(): SessionSnapshot? {
-        val prefs = dataStore.data.first()
-        val id = prefs[KEY_SESSION_ID] ?: return null
-        val startMs = prefs[KEY_SESSION_START] ?: return null
-        val endMs = prefs[KEY_SESSION_END] ?: return null
-        val duration = prefs[KEY_SESSION_DURATION] ?: return null
-        val packages = prefs[KEY_SESSION_PACKAGES] ?: emptySet()
-        val status = prefs[KEY_SESSION_STATUS] ?: return null
-        val activity = prefs[KEY_SESSION_ACTIVITY] ?: "TRABAJAR"
+    suspend fun loadActiveSession(): SessionSnapshot? = activeSession.first()
 
-        return SessionSnapshot(id, startMs, endMs, duration, packages, status, activity)
+    private fun toSessionSnapshot(prefs: Preferences): SessionSnapshot? {
+        return SessionSnapshot(
+            id = prefs[KEY_SESSION_ID] ?: return null,
+            startMs = prefs[KEY_SESSION_START] ?: return null,
+            endMs = prefs[KEY_SESSION_END] ?: return null,
+            durationMinutes = prefs[KEY_SESSION_DURATION] ?: return null,
+            packageNames = prefs[KEY_SESSION_PACKAGES] ?: emptySet(),
+            status = prefs[KEY_SESSION_STATUS] ?: return null,
+            activityType = prefs[KEY_SESSION_ACTIVITY] ?: FocusActivityType.WORK.id
+        )
     }
 
     /** Elimina todos los metadatos de la sesión activa en una sola transacción. */
@@ -152,32 +161,33 @@ class FocusPreferencesDataSource @Inject constructor(
 
     // ── Preferencias de Smartwatch ──────────────────────────────────────────
 
-    val smartwatchHapticEnabled: Flow<Boolean> = dataStore.data
-        .map { prefs -> prefs[KEY_SMARTWATCH_HAPTIC] ?: true }
+    /** Flujo de las preferencias del reloj. */
+    val smartwatchSettings: Flow<SmartwatchSettings> = dataStore.data
+        .map { prefs ->
+            SmartwatchSettings(
+                hapticsEnabled = prefs[KEY_WATCH_HAPTICS] ?: true,
+                inactivityAlertsEnabled = prefs[KEY_WATCH_INACTIVITY] ?: true,
+                inactivityThresholdMinutes = prefs[KEY_WATCH_INACTIVITY_THRESHOLD]
+                    ?: SmartwatchSettings.DEFAULT_INACTIVITY_THRESHOLD_MINUTES,
+                restIndicatorEnabled = prefs[KEY_WATCH_REST_INDICATOR] ?: true
+            )
+        }
+        .distinctUntilChanged()
 
-    suspend fun setSmartwatchHapticEnabled(enabled: Boolean) {
-        dataStore.edit { it[KEY_SMARTWATCH_HAPTIC] = enabled }
+    suspend fun setSmartwatchHapticsEnabled(enabled: Boolean) {
+        dataStore.edit { it[KEY_WATCH_HAPTICS] = enabled }
     }
 
-    val smartwatchSedentarismEnabled: Flow<Boolean> = dataStore.data
-        .map { prefs -> prefs[KEY_SMARTWATCH_SEDENTARISM] ?: true }
-
-    suspend fun setSmartwatchSedentarismEnabled(enabled: Boolean) {
-        dataStore.edit { it[KEY_SMARTWATCH_SEDENTARISM] = enabled }
+    suspend fun setSmartwatchInactivityEnabled(enabled: Boolean) {
+        dataStore.edit { it[KEY_WATCH_INACTIVITY] = enabled }
     }
 
-    val smartwatchSedentarismThresholdMinutes: Flow<Int> = dataStore.data
-        .map { prefs -> prefs[KEY_SMARTWATCH_SEDENTARISM_THRESHOLD] ?: 45 }
-
-    suspend fun setSmartwatchSedentarismThreshold(minutes: Int) {
-        dataStore.edit { it[KEY_SMARTWATCH_SEDENTARISM_THRESHOLD] = minutes }
+    suspend fun setSmartwatchInactivityThreshold(minutes: Int) {
+        dataStore.edit { it[KEY_WATCH_INACTIVITY_THRESHOLD] = minutes }
     }
-
-    val smartwatchRestIndicatorEnabled: Flow<Boolean> = dataStore.data
-        .map { prefs -> prefs[KEY_SMARTWATCH_REST_INDICATOR] ?: true }
 
     suspend fun setSmartwatchRestIndicatorEnabled(enabled: Boolean) {
-        dataStore.edit { it[KEY_SMARTWATCH_REST_INDICATOR] = enabled }
+        dataStore.edit { it[KEY_WATCH_REST_INDICATOR] = enabled }
     }
 
     /**
@@ -191,6 +201,6 @@ class FocusPreferencesDataSource @Inject constructor(
         val durationMinutes: Int,
         val packageNames: Set<String>,
         val status: String,
-        val activityType: String = "TRABAJAR"
+        val activityType: String
     )
 }

@@ -1,11 +1,9 @@
 package com.focus.app.feature.session
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -20,7 +18,6 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -28,11 +25,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.DirectionsWalk
 import androidx.compose.material.icons.rounded.AutoStories
-import androidx.compose.material.icons.rounded.CheckCircle
-import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.School
 import androidx.compose.material.icons.rounded.SelfImprovement
-import androidx.compose.material.icons.rounded.Vibration
 import androidx.compose.material.icons.rounded.Watch
 import androidx.compose.material.icons.rounded.Work
 import androidx.compose.material3.AlertDialog
@@ -43,22 +37,24 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.focus.app.R
 import com.focus.app.core.designsystem.FocusAccent
 import com.focus.app.core.designsystem.FocusAccentLight
 import com.focus.app.core.designsystem.FocusAccentSubtle
 import com.focus.app.core.designsystem.FocusBackground
-import com.focus.app.core.designsystem.FocusBorder
 import com.focus.app.core.designsystem.FocusCard
 import com.focus.app.core.designsystem.FocusOnSurface
 import com.focus.app.core.designsystem.FocusOnSurfaceVariant
@@ -76,8 +72,9 @@ import com.focus.app.domain.model.FocusActivityType
 /**
  * Pantalla de sesión activa de Focus vinculada al Smartwatch.
  *
- * Muestra el temporizador, alerta de falta de movimiento ("Mucho tiempo sin moverte"),
- * la pantalla espejo del reloj, y el modo de descanso guiado ("Te indica cuándo descansar").
+ * Muestra el temporizador, la alerta de falta de movimiento, la pantalla espejo
+ * del reloj y el descanso guiado. Se cierra sola cuando ya no hay sesión en curso,
+ * sin importar si terminó desde esta pantalla, el bloqueo o el reloj.
  */
 @Composable
 fun FocusSessionScreen(
@@ -86,8 +83,21 @@ fun FocusSessionScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    BackHandler(enabled = uiState.isActive) {
-        viewModel.onEndSessionClicked()
+    val isFocusing = uiState.stage == SessionStage.FOCUSING
+    val isResting = uiState.stage == SessionStage.RESTING
+    val isCompleted = uiState.stage == SessionStage.COMPLETED
+
+    LaunchedEffect(uiState.stage) {
+        if (uiState.stage == SessionStage.IDLE) onSessionEnded()
+    }
+
+    BackHandler {
+        when (uiState.stage) {
+            SessionStage.FOCUSING -> viewModel.onEndSessionClicked()
+            SessionStage.RESTING -> viewModel.onSkipBreak()
+            SessionStage.COMPLETED -> viewModel.onDone()
+            SessionStage.IDLE -> onSessionEnded()
+        }
     }
 
     Surface(
@@ -117,18 +127,19 @@ fun FocusSessionScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     ActivityPill(activity = uiState.activityType)
-                    SmartwatchBadge()
+                    SmartwatchBadge(isConnected = uiState.isWatchConnected)
                 }
 
                 Spacer(modifier = Modifier.height(12.dp))
 
                 Text(
-                    text = when {
-                        uiState.isBreakModeActive -> "Tiempo de Descansar"
-                        uiState.isCompleted -> "¡Sesión Completada!"
-                        uiState.isInterrupted -> "Sesión Interrumpida"
-                        else -> "Modo Concentración Activo"
-                    },
+                    text = stringResource(
+                        when {
+                            isResting -> R.string.session_title_resting
+                            isCompleted -> R.string.session_title_completed
+                            else -> R.string.session_title_focusing
+                        }
+                    ),
                     style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
                     color = FocusOnSurface,
                     textAlign = TextAlign.Center
@@ -137,22 +148,22 @@ fun FocusSessionScreen(
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // ── Alerta de Sedentarismo ("Mucho tiempo sin moverte") ──────────
+            // ── Alerta de inactividad física ─────────────────────────────────
             AnimatedVisibility(
-                visible = uiState.isSedentaryAlertActive,
+                visible = isFocusing && uiState.isInactivityAlertActive,
                 enter = fadeIn(),
                 exit = fadeOut()
             ) {
-                SedentarismAlertCard(
+                InactivityAlertCard(
                     minutesStill = uiState.minutesWithoutMovement,
                     onAcknowledge = viewModel::onAcknowledgeMovement
                 )
                 Spacer(modifier = Modifier.height(16.dp))
             }
 
-            // ── Modo Descanso Guiado ("Te indica cuándo descansar") ──────────
+            // ── Descanso guiado ──────────────────────────────────────────────
             AnimatedVisibility(
-                visible = uiState.isBreakModeActive,
+                visible = isResting,
                 enter = fadeIn(),
                 exit = fadeOut()
             ) {
@@ -164,7 +175,7 @@ fun FocusSessionScreen(
             }
 
             // ── Temporizador circular central ────────────────────────────────
-            if (!uiState.isBreakModeActive) {
+            if (!isResting) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -174,13 +185,15 @@ fun FocusSessionScreen(
                     FocusProgressIndicator(
                         progress = uiState.progress,
                         timeRemainingLabel = uiState.timeRemainingLabel,
-                        statusLabel = when {
-                            uiState.isCompleted -> "Completado"
-                            uiState.isInterrupted -> "Interrumpido"
-                            else -> "Protegiendo tu atención"
-                        },
+                        statusLabel = stringResource(
+                            if (isCompleted) {
+                                R.string.session_status_completed
+                            } else {
+                                R.string.session_status_focusing
+                            }
+                        ),
                         modifier = Modifier.fillMaxWidth(0.85f),
-                        progressColor = if (uiState.isCompleted) FocusSuccess else FocusAccent
+                        progressColor = if (isCompleted) FocusSuccess else FocusAccent
                     )
                 }
             }
@@ -190,10 +203,10 @@ fun FocusSessionScreen(
             // ── Espejo en vivo de la pantalla del Smartwatch ─────────────────
             SmartwatchLivePreview(
                 activity = uiState.activityType,
-                timeLabel = if (uiState.isBreakModeActive) uiState.breakRemainingLabel else uiState.timeRemainingLabel,
+                timeLabel = if (isResting) uiState.breakRemainingLabel else uiState.timeRemainingLabel,
                 progress = uiState.progress,
-                isSedentaryWarning = uiState.isSedentaryAlertActive,
-                isRestMode = uiState.isBreakModeActive
+                isInactivityWarning = isFocusing && uiState.isInactivityAlertActive,
+                isRestMode = isResting
             )
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -204,15 +217,15 @@ fun FocusSessionScreen(
                     .fillMaxWidth()
                     .padding(bottom = 24.dp)
             ) {
-                if (uiState.isActive && !uiState.isBreakModeActive) {
+                if (isFocusing) {
                     FocusDestructiveButton(
-                        text = "Terminar Sesión de Enfoque",
-                        onClick = { viewModel.onEndSessionClicked() }
+                        text = stringResource(R.string.session_end_button),
+                        onClick = viewModel::onEndSessionClicked
                     )
-                } else {
+                } else if (isCompleted) {
                     FocusPrimaryButton(
-                        text = "Listo para continuar",
-                        onClick = onSessionEnded
+                        text = stringResource(R.string.session_done_button),
+                        onClick = viewModel::onDone
                     )
                 }
             }
@@ -229,26 +242,26 @@ fun FocusSessionScreen(
             shape = RoundedCornerShape(24.dp),
             title = {
                 Text(
-                    text = "¿Terminar sesión antes de tiempo?",
+                    text = stringResource(R.string.session_end_confirm_title),
                     style = MaterialTheme.typography.titleLarge
                 )
             },
             text = {
                 Text(
-                    text = "El smartwatch y tu celular reanudarán las notificaciones habituales.",
+                    text = stringResource(R.string.session_end_confirm_message),
                     style = MaterialTheme.typography.bodyMedium
                 )
             },
             confirmButton = {
                 FocusTextButton(
-                    text = "Sí, terminar",
+                    text = stringResource(R.string.session_end_confirm_yes),
                     onClick = { viewModel.onConfirmEndSession() },
                     contentColor = Color(0xFFF87171)
                 )
             },
             dismissButton = {
                 FocusTextButton(
-                    text = "Seguir enfocado",
+                    text = stringResource(R.string.session_end_confirm_no),
                     onClick = { viewModel.onDismissEndSessionDialog() },
                     contentColor = FocusAccent
                 )
@@ -260,9 +273,9 @@ fun FocusSessionScreen(
 @Composable
 private fun ActivityPill(activity: FocusActivityType) {
     val icon = when (activity) {
-        FocusActivityType.ESTUDIAR -> Icons.Rounded.School
-        FocusActivityType.TRABAJAR -> Icons.Rounded.Work
-        FocusActivityType.LEER -> Icons.Rounded.AutoStories
+        FocusActivityType.STUDY -> Icons.Rounded.School
+        FocusActivityType.WORK -> Icons.Rounded.Work
+        FocusActivityType.READ -> Icons.Rounded.AutoStories
     }
     Surface(
         shape = CircleShape,
@@ -281,19 +294,27 @@ private fun ActivityPill(activity: FocusActivityType) {
 }
 
 @Composable
-private fun SmartwatchBadge() {
+private fun SmartwatchBadge(isConnected: Boolean) {
+    val contentColor = if (isConnected) FocusSuccess else FocusOnSurfaceVariant
+
     Surface(
         shape = CircleShape,
-        color = FocusSuccessSubtle,
-        border = BorderStroke(1.dp, FocusSuccess.copy(alpha = 0.3f))
+        color = if (isConnected) FocusSuccessSubtle else FocusCard,
+        border = BorderStroke(1.dp, contentColor.copy(alpha = 0.3f))
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(5.dp)
         ) {
-            Icon(imageVector = Icons.Rounded.Watch, contentDescription = null, tint = FocusSuccess, modifier = Modifier.size(14.dp))
-            Text(text = "Reloj Sincronizado", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold), color = FocusSuccess)
+            Icon(imageVector = Icons.Rounded.Watch, contentDescription = null, tint = contentColor, modifier = Modifier.size(14.dp))
+            Text(
+                text = stringResource(
+                    if (isConnected) R.string.session_watch_synced else R.string.session_watch_not_connected
+                ),
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                color = contentColor
+            )
         }
     }
 }
@@ -302,7 +323,7 @@ private fun SmartwatchBadge() {
  * Tarjeta de alerta cuando se detecta inmovilidad continua.
  */
 @Composable
-private fun SedentarismAlertCard(
+private fun InactivityAlertCard(
     minutesStill: Int,
     onAcknowledge: () -> Unit
 ) {
@@ -339,12 +360,12 @@ private fun SedentarismAlertCard(
 
                 Column {
                     Text(
-                        text = "⌚ Llevas mucho tiempo sin moverte",
+                        text = stringResource(R.string.session_inactivity_title),
                         style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                         color = FocusWarning
                     )
                     Text(
-                        text = "Tu Smartwatch vibró suavemente en tu muñeca",
+                        text = stringResource(R.string.session_inactivity_subtitle),
                         style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
                         color = FocusOnSurfaceVariant
                     )
@@ -352,7 +373,7 @@ private fun SedentarismAlertCard(
             }
 
             Text(
-                text = "Llevas aproximadamente $minutesStill minutos enfocado en la misma posición. Ponte de pie, estira los brazos o camina 1 minuto para cuidar tu circulación.",
+                text = stringResource(R.string.session_inactivity_message, minutesStill),
                 style = MaterialTheme.typography.bodySmall,
                 color = FocusOnSurface
             )
@@ -367,7 +388,7 @@ private fun SedentarismAlertCard(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(
-                    text = "¡Ya me estiré! Continuar sesión",
+                    text = stringResource(R.string.session_inactivity_acknowledge),
                     style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
                 )
             }
@@ -376,7 +397,7 @@ private fun SedentarismAlertCard(
 }
 
 /**
- * Tarjeta de descanso guiado ("Te indica cuándo descansar").
+ * Tarjeta de descanso guiado al terminar la sesión.
  */
 @Composable
 private fun BreakModeCard(
@@ -412,7 +433,7 @@ private fun BreakModeCard(
             }
 
             Text(
-                text = "🌿 ¡Hora de descansar!",
+                text = stringResource(R.string.session_break_title),
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                 color = FocusOnSurface
             )
@@ -424,14 +445,14 @@ private fun BreakModeCard(
             )
 
             Text(
-                text = "Tu Smartwatch te ha indicado descansar. Mira a un punto lejano, respira profundamente y relaja la vista antes de tu siguiente bloque.",
+                text = stringResource(R.string.session_break_message),
                 style = MaterialTheme.typography.bodySmall,
                 color = FocusOnSurfaceVariant,
                 textAlign = TextAlign.Center
             )
 
             FocusTextButton(
-                text = "Omitir descanso y finalizar",
+                text = stringResource(R.string.session_break_skip),
                 onClick = onSkipBreak,
                 contentColor = FocusSuccess
             )

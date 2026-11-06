@@ -2,9 +2,11 @@ package com.focus.app.feature.appselection
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.focus.app.domain.model.InstalledApp
 import com.focus.app.domain.usecase.GetInstalledAppsUseCase
 import com.focus.app.domain.usecase.SaveSelectedAppsUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -13,7 +15,6 @@ import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
 /**
  * ViewModel de la pantalla de selección de aplicaciones.
@@ -50,18 +51,20 @@ class AppSelectionViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
 
-            // Carga en paralelo: apps instaladas + selecciones guardadas
             val persistedSelections = saveSelectedApps.loadCurrent()
 
-            val result = getInstalledApps()
-
-            result.fold(
+            getInstalledApps().fold(
                 onSuccess = { apps ->
+                    // Descarta las apps desinstaladas desde la última selección
+                    val installedPackages = apps.mapTo(mutableSetOf()) { it.packageName }
+                    val validSelections = persistedSelections.intersect(installedPackages)
+                    if (validSelections != persistedSelections) saveSelectedApps(validSelections)
+
                     _uiState.update {
                         it.copy(
                             allApps = apps,
-                            filteredApps = apps,
-                            selectedPackageNames = persistedSelections,
+                            filteredApps = filter(apps, it.searchQuery),
+                            selectedPackageNames = validSelections,
                             isLoading = false,
                             errorMessage = null
                         )
@@ -71,7 +74,7 @@ class AppSelectionViewModel @Inject constructor(
                     _uiState.update {
                         it.copy(
                             isLoading = false,
-                            errorMessage = error.message ?: "Could not load apps"
+                            errorMessage = error.message
                         )
                     }
                 }
@@ -89,29 +92,24 @@ class AppSelectionViewModel @Inject constructor(
                 .debounce(150L) // Debounce para evitar filtrar en cada tecla
                 .distinctUntilChanged()
                 .collect { query ->
-                    filterApps(query)
+                    _uiState.update { it.copy(filteredApps = filter(it.allApps, query)) }
                 }
         }
     }
 
     /**
-     * Filtra la lista de apps en memoria por nombre o nombre de paquete.
+     * Filtra una lista de apps por nombre o nombre de paquete.
      *
+     * @param apps Lista a filtrar.
      * @param query Texto de búsqueda (insensible a mayúsculas).
+     * @return Las apps que coinciden, o todas si la búsqueda está vacía.
      */
-    private fun filterApps(query: String) {
-        val allApps = _uiState.value.allApps
-        val filtered = if (query.isBlank()) {
-            allApps
-        } else {
-            val lowerQuery = query.lowercase()
-            allApps.filter { app ->
-                app.displayName.lowercase().contains(lowerQuery) ||
-                    app.packageName.lowercase().contains(lowerQuery)
-            }
+    private fun filter(apps: List<InstalledApp>, query: String): List<InstalledApp> {
+        if (query.isBlank()) return apps
+        return apps.filter { app ->
+            app.displayName.contains(query, ignoreCase = true) ||
+                app.packageName.contains(query, ignoreCase = true)
         }
-
-        _uiState.update { it.copy(filteredApps = filtered, searchQuery = query) }
     }
 
     /**
@@ -120,6 +118,8 @@ class AppSelectionViewModel @Inject constructor(
      * @param query Nuevo texto de búsqueda ingresado por el usuario.
      */
     fun onSearchQueryChanged(query: String) {
+        // El campo de texto se actualiza al instante; solo el filtrado usa debounce
+        _uiState.update { it.copy(searchQuery = query) }
         _searchQuery.value = query
     }
 

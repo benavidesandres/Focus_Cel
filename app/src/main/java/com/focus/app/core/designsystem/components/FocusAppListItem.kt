@@ -3,9 +3,7 @@ package com.focus.app.core.designsystem.components
 import android.graphics.drawable.Drawable
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.spring
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -21,8 +19,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.focus.app.R
 import com.focus.app.core.designsystem.FocusAccent
 import com.focus.app.core.designsystem.FocusAccentSubtle
 import com.focus.app.core.designsystem.FocusCard
@@ -110,7 +110,9 @@ fun FocusAppListItem(
                 } else {
                     Icons.Rounded.RadioButtonUnchecked
                 },
-                contentDescription = if (isSelected) "Selected" else "Not selected",
+                contentDescription = stringResource(
+                    if (isSelected) R.string.app_item_selected else R.string.app_item_not_selected
+                ),
                 tint = checkColor,
                 modifier = Modifier.size(24.dp)
             )

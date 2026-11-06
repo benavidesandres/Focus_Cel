@@ -2,17 +2,13 @@ package com.focus.app.platform.smartwatch
 
 import com.google.android.gms.wearable.CapabilityInfo
 import com.google.android.gms.wearable.MessageEvent
-import com.google.android.gms.wearable.Node
 import com.google.android.gms.wearable.WearableListenerService
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 
 /**
- * Servicio de escucha en segundo plano para eventos provenientes del Smartwatch (Wear OS).
- *
- * Recibe eventos cuando el usuario interactúa directamente con el reloj,
- * cuando los sensores de movimiento del reloj detectan patrones,
- * o cuando el estado de conexión del reloj físico cambia.
+ * Punto de entrada de los eventos del reloj, tanto con la app abierta como cerrada.
+ * Google Play Services crea el proceso si hace falta, así que no se necesitan listeners dinámicos.
  */
 @AndroidEntryPoint
 class FocusWearableListenerService : WearableListenerService() {
@@ -21,18 +17,14 @@ class FocusWearableListenerService : WearableListenerService() {
     lateinit var syncManager: SmartwatchSyncManager
 
     override fun onMessageReceived(messageEvent: MessageEvent) {
-        syncManager.processIncomingMessage(messageEvent.path, messageEvent.data)
+        syncManager.onMessageReceived(
+            sourceNodeId = messageEvent.sourceNodeId,
+            path = messageEvent.path,
+            data = messageEvent.data
+        )
     }
 
     override fun onCapabilityChanged(capabilityInfo: CapabilityInfo) {
-        syncManager.checkConnectedNodes()
-    }
-
-    override fun onPeerConnected(peer: Node) {
-        syncManager.checkConnectedNodes()
-    }
-
-    override fun onPeerDisconnected(peer: Node) {
-        syncManager.checkConnectedNodes()
+        syncManager.refreshConnection()
     }
 }

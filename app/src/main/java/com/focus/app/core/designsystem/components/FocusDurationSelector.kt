@@ -4,7 +4,6 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -17,12 +16,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.focus.app.R
 import com.focus.app.core.designsystem.FocusAccent
-import com.focus.app.core.designsystem.FocusAccentBorder
 import com.focus.app.core.designsystem.FocusAccentLight
 import com.focus.app.core.designsystem.FocusAccentSubtle
 import com.focus.app.core.designsystem.FocusBorder
@@ -125,7 +125,7 @@ fun FocusDurationChip(
             )
             if (isSignature) {
                 Text(
-                    text = "RECOMENDADO",
+                    text = stringResource(R.string.duration_chip_recommended),
                     fontSize = 8.sp,
                     fontWeight = FontWeight.Bold,
                     letterSpacing = 0.5.sp,
@@ -138,12 +138,14 @@ fun FocusDurationChip(
 
 /**
  * Formatea los minutos en una etiqueta legible para el chip.
- * Por ejemplo: 25 → "25 min", 60 → "1 hr"
+ * Por ejemplo: 25 → "25 min", 60 → "1 hr", 90 → "1h 30m".
  */
+@Composable
 private fun formatDurationChipLabel(minutes: Int): String {
     return when {
-        minutes < 60 -> "$minutes min"
-        minutes == 60 -> "1 hr"
-        else -> "${minutes / 60}h ${minutes % 60}m"
+        minutes < 60 -> stringResource(R.string.duration_chip_minutes, minutes)
+        minutes == 60 -> stringResource(R.string.duration_chip_one_hour)
+        minutes % 60 == 0 -> stringResource(R.string.duration_chip_hours, minutes / 60)
+        else -> stringResource(R.string.duration_hours_minutes, minutes / 60, minutes % 60)
     }
 }

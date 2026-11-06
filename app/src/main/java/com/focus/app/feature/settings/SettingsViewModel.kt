@@ -4,17 +4,15 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.focus.app.BuildConfig
-import com.focus.app.data.local.preferences.FocusPreferencesDataSource
+import com.focus.app.domain.repository.SmartwatchGateway
+import com.focus.app.domain.repository.SmartwatchSettingsRepository
 import com.focus.app.domain.usecase.GetRestrictionStatusUseCase
-import com.focus.app.domain.usecase.SaveSelectedAppsUseCase
 import com.focus.app.platform.accessibility.FocusAccessibilityService
-import com.focus.app.platform.smartwatch.SmartwatchSyncManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -23,81 +21,33 @@ import javax.inject.Inject
  * ViewModel para la pantalla de configuración de Focus.
  *
  * Administra las preferencias globales, monitorea el estado del servicio de accesibilidad
- * y gestiona las configuraciones de sincronización háptica y detección de sedentarismo del Smartwatch.
+ * y gestiona las preferencias del reloj.
  */
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val restrictionStatus: GetRestrictionStatusUseCase,
-    private val saveSelectedApps: SaveSelectedAppsUseCase,
-    private val preferencesDataSource: FocusPreferencesDataSource,
-    val smartwatchSyncManager: SmartwatchSyncManager
+    private val settingsRepository: SmartwatchSettingsRepository,
+    private val smartwatch: SmartwatchGateway
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(
-        SettingsUiState(
-            appVersion = BuildConfig.VERSION_NAME
-        )
-    )
+    private val _uiState = MutableStateFlow(SettingsUiState(appVersion = BuildConfig.VERSION_NAME))
     val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
 
     init {
-        observePreferences()
-        observeSmartwatch()
-        checkAccessibilityService()
-    }
-
-    private fun observePreferences() {
         viewModelScope.launch {
-            val phonePrefsFlow = combine(
-                restrictionStatus.preferredDurationMinutes,
-                saveSelectedApps.selectedPackageNames
-            ) { duration, packages ->
-                Pair(if (duration > 0) duration else 45, packages.size)
-            }
-
-            val watchPrefsFlow = combine(
-                preferencesDataSource.smartwatchHapticEnabled,
-                preferencesDataSource.smartwatchSedentarismEnabled,
-                preferencesDataSource.smartwatchSedentarismThresholdMinutes,
-                preferencesDataSource.smartwatchRestIndicatorEnabled
-            ) { haptic, sedentarism, threshold, restIndicator ->
-                WatchPreferences(haptic, sedentarism, threshold, restIndicator)
-            }
-
-            combine(phonePrefsFlow, watchPrefsFlow) { (duration, packageCount), watch ->
-                SettingsData(
-                    duration = duration,
-                    packageCount = packageCount,
-                    haptic = watch.haptic,
-                    sedentarism = watch.sedentarism,
-                    threshold = watch.threshold,
-                    restIndicator = watch.restIndicator
-                )
-            }.collect { data ->
-                _uiState.update {
-                    it.copy(
-                        preferredDurationMinutes = data.duration,
-                        selectedAppsCount = data.packageCount,
-                        isSmartwatchHapticEnabled = data.haptic,
-                        isSmartwatchSedentarismEnabled = data.sedentarism,
-                        smartwatchSedentarismThresholdMinutes = data.threshold,
-                        isSmartwatchRestIndicatorEnabled = data.restIndicator
-                    )
-                }
+            restrictionStatus.preferredDurationMinutes.collect { minutes ->
+                _uiState.update { it.copy(preferredDurationMinutes = minutes) }
             }
         }
-    }
-
-    private fun observeSmartwatch() {
         viewModelScope.launch {
-            smartwatchSyncManager.connectedWatch.collect { watch ->
-                _uiState.update {
-                    it.copy(
-                        smartwatchName = watch.name,
-                        isSmartwatchConnected = watch.isConnected
-                    )
-                }
+            settingsRepository.settings.collect { settings ->
+                _uiState.update { it.copy(smartwatchSettings = settings) }
+            }
+        }
+        viewModelScope.launch {
+            smartwatch.device.collect { device ->
+                _uiState.update { it.copy(smartwatchDevice = device) }
             }
         }
     }
@@ -108,48 +58,22 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun onDurationSelected(minutes: Int) {
-        viewModelScope.launch {
-            restrictionStatus.savePreferredDuration(minutes)
-        }
+        viewModelScope.launch { restrictionStatus.savePreferredDuration(minutes) }
     }
 
-    fun onToggleSmartwatchHaptic(enabled: Boolean) {
-        viewModelScope.launch {
-            preferencesDataSource.setSmartwatchHapticEnabled(enabled)
-        }
+    fun onToggleHaptics(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setHapticsEnabled(enabled) }
     }
 
-    fun onToggleSmartwatchSedentarism(enabled: Boolean) {
-        viewModelScope.launch {
-            preferencesDataSource.setSmartwatchSedentarismEnabled(enabled)
-        }
+    fun onToggleInactivityAlerts(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setInactivityAlertsEnabled(enabled) }
     }
 
-    fun onSedentarismThresholdSelected(minutes: Int) {
-        viewModelScope.launch {
-            preferencesDataSource.setSmartwatchSedentarismThreshold(minutes)
-        }
+    fun onInactivityThresholdSelected(minutes: Int) {
+        viewModelScope.launch { settingsRepository.setInactivityThresholdMinutes(minutes) }
     }
 
-    fun onToggleSmartwatchRestIndicator(enabled: Boolean) {
-        viewModelScope.launch {
-            preferencesDataSource.setSmartwatchRestIndicatorEnabled(enabled)
-        }
+    fun onToggleRestIndicator(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setRestIndicatorEnabled(enabled) }
     }
-
-    private data class WatchPreferences(
-        val haptic: Boolean,
-        val sedentarism: Boolean,
-        val threshold: Int,
-        val restIndicator: Boolean
-    )
-
-    private data class SettingsData(
-        val duration: Int,
-        val packageCount: Int,
-        val haptic: Boolean,
-        val sedentarism: Boolean,
-        val threshold: Int,
-        val restIndicator: Boolean
-    )
 }

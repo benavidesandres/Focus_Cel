@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AutoStories
-import androidx.compose.material.icons.rounded.MenuBook
 import androidx.compose.material.icons.rounded.School
 import androidx.compose.material.icons.rounded.Work
 import androidx.compose.material3.Icon
@@ -34,14 +33,13 @@ import com.focus.app.core.designsystem.FocusAccentSubtle
 import com.focus.app.core.designsystem.FocusBorder
 import com.focus.app.core.designsystem.FocusCard
 import com.focus.app.core.designsystem.FocusChipSelectedBorder
-import com.focus.app.core.designsystem.FocusOnSurface
 import com.focus.app.core.designsystem.FocusOnSurfaceVariant
 import com.focus.app.domain.model.FocusActivityType
 
 /**
  * Selector principal de actividad de concentración previo a iniciar la sesión.
  *
- * "¿Qué vas a hacer? [ Estudiar ] [ Trabajar ] [ Leer ]"
+ * "What are you going to do? [ Study ] [ Work ] [ Read ]"
  *
  * @param selectedActivity Actividad seleccionada actualmente.
  * @param onActivitySelected Callback al seleccionar una actividad.
@@ -107,9 +105,9 @@ private fun ActivityOptionChip(
     )
 
     val iconVector: ImageVector = when (activity) {
-        FocusActivityType.ESTUDIAR -> Icons.Rounded.School
-        FocusActivityType.TRABAJAR -> Icons.Rounded.Work
-        FocusActivityType.LEER -> Icons.Rounded.AutoStories
+        FocusActivityType.STUDY -> Icons.Rounded.School
+        FocusActivityType.WORK -> Icons.Rounded.Work
+        FocusActivityType.READ -> Icons.Rounded.AutoStories
     }
 
     Surface(

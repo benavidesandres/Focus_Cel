@@ -1,24 +1,32 @@
 package com.focus.app.platform.smartwatch
 
 import android.content.Context
-import com.focus.app.data.local.preferences.FocusPreferencesDataSource
-import com.focus.app.domain.model.FocusActivityType
+import android.util.Log
+import com.focus.app.core.di.ApplicationScope
+import com.focus.app.domain.model.FocusSession
+import com.focus.app.domain.model.SmartwatchCommand
+import com.focus.app.domain.model.SmartwatchConnectionState
 import com.focus.app.domain.model.SmartwatchDevice
 import com.focus.app.domain.model.SmartwatchProtocol
-import com.focus.app.domain.model.SmartwatchSyncState
+import com.focus.app.domain.model.SmartwatchProtocol.HapticPattern
+import com.focus.app.domain.model.SmartwatchSettings
+import com.focus.app.domain.repository.SmartwatchGateway
+import com.focus.app.domain.repository.SmartwatchSettingsRepository
+import com.focus.app.domain.session.Clock
 import com.google.android.gms.wearable.CapabilityClient
-import com.google.android.gms.wearable.MessageClient
-import com.google.android.gms.wearable.NodeClient
 import com.google.android.gms.wearable.PutDataMapRequest
 import com.google.android.gms.wearable.Wearable
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
@@ -27,402 +35,270 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Gestor integral de sincronización entre el Smartphone y el Smartwatch (Wear OS).
+ * Gestor de la comunicación con el reloj sobre la Wearable Data Layer.
  *
- * Administra el canal de comunicación bidireccional usando la Wearable Data Layer API:
- * 1. Envío de inicio, progreso y fin de sesión al reloj.
- * 2. Bloqueo sincronizado de notificaciones (Distraction Shield).
- * 3. Ejecución de patrones de vibración háptica en la muñeca del usuario.
- * 4. Detección y notificación de inactividad física prolongada ("Mucho tiempo sin moverte").
- * 5. Indicador de descanso cuando concluye el tiempo ("Te indica cuándo descansar").
- * 6. Compatibilidad completa con hardware físico Wear OS (Pixel Watch, Galaxy Watch, etc.)
- *    y fallback interactivo a modo complementario cuando no hay un reloj físico emparejado.
+ * - El estado de la sesión se publica como DataItem con timestamps absolutos: la Data Layer lo
+ *   entrega aunque el reloj esté desconectado en ese momento, y el reloj cuenta por su cuenta.
+ * - Los eventos puntuales (inicio, alertas, vibraciones) viajan como mensajes.
+ * - Los envíos se procesan en orden para que un "detener" nunca adelante a un "iniciar".
+ *
+ * Refleja siempre el estado real: si no hay reloj, lo informa como desconectado.
  */
 @Singleton
 class SmartwatchSyncManager @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val preferencesDataSource: FocusPreferencesDataSource,
+    settingsRepository: SmartwatchSettingsRepository,
     private val hapticHelper: SmartwatchHapticHelper,
-    val sedentarismDetector: SedentarismDetector
-) {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val clock: Clock,
+    @ApplicationScope private val scope: CoroutineScope
+) : SmartwatchGateway {
 
-    private val nodeClient: NodeClient by lazy { Wearable.getNodeClient(context) }
-    private val messageClient: MessageClient by lazy { Wearable.getMessageClient(context) }
+    private val nodeClient by lazy { Wearable.getNodeClient(context) }
+    private val messageClient by lazy { Wearable.getMessageClient(context) }
     private val dataClient by lazy { Wearable.getDataClient(context) }
-    private val capabilityClient: CapabilityClient by lazy { Wearable.getCapabilityClient(context) }
+    private val capabilityClient by lazy { Wearable.getCapabilityClient(context) }
 
-    private val _connectedWatch = MutableStateFlow(
-        SmartwatchDevice(
-            name = "Buscando Smartwatch...",
-            isConnected = false,
-            batteryPercent = 88,
-            isSimulated = false
-        )
-    )
-    val connectedWatch: StateFlow<SmartwatchDevice> = _connectedWatch.asStateFlow()
+    private val _device = MutableStateFlow(SmartwatchDevice())
+    override val device: StateFlow<SmartwatchDevice> = _device.asStateFlow()
 
-    private val _syncState = MutableStateFlow(SmartwatchSyncState.CONNECTING)
-    val syncState: StateFlow<SmartwatchSyncState> = _syncState.asStateFlow()
+    private val commandChannel = Channel<SmartwatchCommand>(Channel.BUFFERED)
+    override val commands: Flow<SmartwatchCommand> = commandChannel.receiveAsFlow()
+
+    private val settings: StateFlow<SmartwatchSettings> = settingsRepository.settings
+        .stateIn(scope, SharingStarted.Eagerly, SmartwatchSettings())
+
+    // Cola de envíos: un único consumidor garantiza el orden
+    private val outbox = Channel<suspend () -> Unit>(Channel.UNLIMITED)
 
     init {
-        setupDynamicListeners()
-        checkConnectedNodes()
-        observePreferences()
-    }
-
-    /**
-     * Registra listeners en tiempo real para reaccionar al instante cuando un reloj
-     * físico se empareja, se enciende el Bluetooth o se envían mensajes.
-     */
-    private fun setupDynamicListeners() {
-        try {
-            messageClient.addListener { messageEvent ->
-                processIncomingMessage(messageEvent.path, messageEvent.data)
-            }
-
-            capabilityClient.addListener(
-                { _ -> checkConnectedNodes() },
-                SmartwatchProtocol.CAPABILITY_WEAR_APP
-            )
-        } catch (_: Exception) {
-            // Ignorado en entornos donde Google Play Services no esté disponible
-        }
-    }
-
-    /**
-     * Escanea y comprueba los relojes Wear OS físicos conectados mediante Google Play Services.
-     */
-    fun checkConnectedNodes() {
         scope.launch {
-            try {
-                _syncState.value = SmartwatchSyncState.CONNECTING
-                val nodes = nodeClient.connectedNodes.await()
+            for (task in outbox) {
+                runWearableCall(task)
+            }
+        }
+        scope.launch {
+            settingsRepository.settings.collect { current ->
+                enqueue { publishPreferences(current) }
+            }
+        }
+        refreshConnection()
+    }
 
-                var wearAppNodeIds = emptySet<String>()
-                try {
-                    val capabilityInfo = capabilityClient.getCapability(
-                        SmartwatchProtocol.CAPABILITY_WEAR_APP,
-                        CapabilityClient.FILTER_REACHABLE
-                    ).await()
-                    wearAppNodeIds = capabilityInfo.nodes.map { it.id }.toSet()
-                } catch (_: Exception) {
-                    // Si el reloj aún no tiene instalada la app Wear de Focus, se maneja transparentemente
-                }
-
-                if (nodes.isNotEmpty()) {
-                    // Si hay un nodo que ya tiene la app Wear, se prioriza
-                    val primaryNode = nodes.find { wearAppNodeIds.contains(it.id) } ?: nodes.first()
-
-                    _connectedWatch.update {
-                        it.copy(
-                            id = primaryNode.id,
-                            name = primaryNode.displayName.ifBlank { "Smartwatch Wear OS" },
-                            isConnected = true,
-                            isSimulated = false,
-                            isNearby = primaryNode.isNearby,
-                            hasWearApp = wearAppNodeIds.contains(primaryNode.id),
-                            lastSyncTimestampMs = System.currentTimeMillis()
-                        )
-                    }
-                    _syncState.value = SmartwatchSyncState.CONNECTED
-
-                    // Solicita el estado y nivel de batería del reloj físico
-                    requestWatchStatus(primaryNode.id)
+    override fun refreshConnection() {
+        scope.launch {
+            _device.update { current ->
+                if (current.isConnected) {
+                    current
                 } else {
-                    // No hay reloj físico emparejado en este instante; se activa el modo complementario
-                    _connectedWatch.update {
-                        it.copy(
-                            id = "simulated_focus_watch",
-                            name = "Focus Watch (Companion)",
-                            isConnected = true,
-                            isSimulated = true,
-                            isNearby = true,
-                            hasWearApp = true,
-                            lastSyncTimestampMs = System.currentTimeMillis()
-                        )
-                    }
-                    _syncState.value = SmartwatchSyncState.CONNECTED
+                    current.copy(connectionState = SmartwatchConnectionState.SEARCHING)
                 }
-            } catch (_: Exception) {
-                // Fallback seguro al modo complementario activo
-                _connectedWatch.update {
-                    it.copy(
-                        id = "companion_fallback",
-                        name = "Focus Watch (Companion)",
-                        isConnected = true,
-                        isSimulated = true,
-                        isNearby = true,
-                        hasWearApp = true
-                    )
-                }
-                _syncState.value = SmartwatchSyncState.CONNECTED
             }
+
+            val detected = runWearableCall { detectDevice() } ?: SmartwatchDevice(
+                connectionState = SmartwatchConnectionState.DISCONNECTED
+            )
+
+            _device.update { current ->
+                // Conserva la batería ya informada si sigue siendo el mismo reloj
+                val battery = current.batteryPercent.takeIf { current.id == detected.id }
+                detected.copy(batteryPercent = battery)
+            }
+
+            detected.id?.takeIf { detected.isConnected }?.let(::requestWatchStatus)
         }
     }
 
-    /**
-     * Procesa mensajes recibidos desde el Smartwatch (Wear OS).
-     */
-    fun processIncomingMessage(path: String, data: ByteArray?) {
-        scope.launch {
-            when (path) {
-                SmartwatchProtocol.PATH_BATTERY -> {
-                    data?.let { bytes ->
-                        try {
-                            val json = JSONObject(String(bytes))
-                            val battery = json.optInt("battery", -1)
-                            if (battery in 0..100) {
-                                _connectedWatch.update { it.copy(batteryPercent = battery) }
-                            }
-                        } catch (_: Exception) {
-                            // Ignorado si el formato es inválido
-                        }
-                    }
-                }
-                SmartwatchProtocol.PATH_DEVICE_STATUS -> {
-                    data?.let { bytes ->
-                        try {
-                            val json = JSONObject(String(bytes))
-                            val model = json.optString("model", "")
-                            val battery = json.optInt("battery", -1)
-                            _connectedWatch.update { current ->
-                                current.copy(
-                                    name = if (model.isNotBlank()) model else current.name,
-                                    batteryPercent = if (battery in 0..100) battery else current.batteryPercent,
-                                    lastSyncTimestampMs = System.currentTimeMillis()
-                                )
-                            }
-                        } catch (_: Exception) {
-                            checkConnectedNodes()
-                        }
-                    } ?: checkConnectedNodes()
-                }
-                SmartwatchProtocol.PATH_ACCELEROMETER_EVENT -> {
-                    // Movimiento físico detectado por los sensores del reloj
-                    sedentarismDetector.onMovementDetected()
-                }
-                SmartwatchProtocol.PATH_INACTIVITY_ALERT -> {
-                    notifyInactivityDetected()
-                }
-                SmartwatchProtocol.PATH_STOP_SESSION -> {
-                    notifySessionStopped()
-                }
-                SmartwatchProtocol.PATH_PING -> {
-                    broadcastMessage(SmartwatchProtocol.PATH_PONG, byteArrayOf())
-                }
-            }
-        }
+    private suspend fun detectDevice(): SmartwatchDevice {
+        val nodes = nodeClient.connectedNodes.await()
+        val wearAppNodeIds = reachableWearAppNodeIds()
+        val primaryNode = nodes.firstOrNull { it.id in wearAppNodeIds } ?: nodes.firstOrNull()
+            ?: return SmartwatchDevice(connectionState = SmartwatchConnectionState.DISCONNECTED)
+
+        return SmartwatchDevice(
+            id = primaryNode.id,
+            name = primaryNode.displayName,
+            connectionState = if (primaryNode.id in wearAppNodeIds) {
+                SmartwatchConnectionState.CONNECTED
+            } else {
+                SmartwatchConnectionState.MISSING_WEAR_APP
+            },
+            isNearby = primaryNode.isNearby
+        )
     }
 
     private fun requestWatchStatus(nodeId: String) {
-        scope.launch {
-            try {
-                messageClient.sendMessage(
-                    nodeId,
-                    SmartwatchProtocol.PATH_DEVICE_STATUS,
-                    byteArrayOf()
-                ).await()
-            } catch (_: Exception) {
-                // Silencioso
-            }
+        enqueue {
+            messageClient.sendMessage(nodeId, SmartwatchProtocol.PATH_DEVICE_STATUS, EMPTY_PAYLOAD)
+                .await()
         }
     }
 
-    private fun observePreferences() {
-        scope.launch {
-            val haptic = preferencesDataSource.smartwatchHapticEnabled.first()
-            val sedentarism = preferencesDataSource.smartwatchSedentarismEnabled.first()
-            val threshold = preferencesDataSource.smartwatchSedentarismThresholdMinutes.first()
-
-            _connectedWatch.update {
-                it.copy(
-                    hapticVibrationsEnabled = haptic,
-                    sedentarismAlertEnabled = sedentarism,
-                    sedentarismThresholdMinutes = threshold
+    /**
+     * Procesa un mensaje recibido del reloj.
+     *
+     * @param sourceNodeId Nodo que envió el mensaje.
+     * @param path Ruta del mensaje.
+     * @param data Carga útil.
+     */
+    fun onMessageReceived(sourceNodeId: String, path: String, data: ByteArray) {
+        when (val message = SmartwatchMessageParser.parse(path, data)) {
+            is SmartwatchMessage.Command -> commandChannel.trySend(message.command)
+            is SmartwatchMessage.Status -> _device.update { current ->
+                current.copy(
+                    name = message.model ?: current.name,
+                    batteryPercent = message.batteryPercent ?: current.batteryPercent
                 )
             }
+            SmartwatchMessage.Ping -> enqueue {
+                messageClient.sendMessage(sourceNodeId, SmartwatchProtocol.PATH_PONG, EMPTY_PAYLOAD)
+                    .await()
+            }
+            null -> Log.d(TAG, "Ignored message on path $path")
         }
     }
 
-    /**
-     * Sincroniza el inicio de una sesión con el Smartwatch real y la vista complementaria.
-     */
-    fun notifySessionStarted(
-        activityType: FocusActivityType,
-        durationMinutes: Int,
-        totalMillis: Long
+    override fun testVibration() {
+        playHaptic(HapticPattern.SESSION_START, ignoreSettings = true)
+    }
+
+    override fun onSessionStarted(session: FocusSession) {
+        val payload = JSONObject()
+            .put("action", "START")
+            .put("activityId", session.activityType.id)
+            .put("activityName", session.activityType.displayName)
+            .put("durationMinutes", session.durationMinutes)
+            .put("endTimestampMs", session.endTimestampMs)
+
+        enqueue {
+            publishSessionState(STATE_FOCUSING, session, session.endTimestampMs)
+            sendToWatch(SmartwatchProtocol.PATH_START_SESSION, payload)
+        }
+        playHaptic(HapticPattern.SESSION_START)
+    }
+
+    override fun onSessionRestored(session: FocusSession) {
+        enqueue { publishSessionState(STATE_FOCUSING, session, session.endTimestampMs) }
+    }
+
+    override fun onProgress(session: FocusSession, remainingMillis: Long) {
+        val payload = JSONObject()
+            .put("remainingMillis", remainingMillis)
+            .put("activityId", session.activityType.id)
+
+        enqueue { sendToWatch(SmartwatchProtocol.PATH_PROGRESS_UPDATE, payload) }
+    }
+
+    override fun onHalfwayReached() {
+        playHaptic(HapticPattern.HALFWAY_MILESTONE)
+    }
+
+    override fun onInactivityDetected() {
+        val payload = JSONObject().put("type", "INACTIVITY")
+
+        enqueue { sendToWatch(SmartwatchProtocol.PATH_INACTIVITY_ALERT, payload) }
+        playHaptic(HapticPattern.INACTIVITY_NUDGE)
+    }
+
+    override fun onRestStarted(session: FocusSession, breakEndTimestampMs: Long) {
+        val payload = JSONObject()
+            .put("type", "REST_BREAK")
+            .put("breakMinutes", session.breakDurationMinutes)
+            .put("breakEndTimestampMs", breakEndTimestampMs)
+
+        enqueue {
+            publishSessionState(STATE_RESTING, session, breakEndTimestampMs)
+            sendToWatch(SmartwatchProtocol.PATH_REST_ALERT, payload)
+        }
+        playHaptic(HapticPattern.REST_TIME)
+    }
+
+    override fun onSessionStopped() {
+        val payload = JSONObject().put("action", "STOP")
+
+        enqueue {
+            publishSessionState(STATE_IDLE, session = null, endTimestampMs = 0L)
+            sendToWatch(SmartwatchProtocol.PATH_STOP_SESSION, payload)
+        }
+    }
+
+    private fun playHaptic(pattern: HapticPattern, ignoreSettings: Boolean = false) {
+        if (!ignoreSettings && !settings.value.hapticsEnabled) return
+
+        hapticHelper.play(pattern)
+        val payload = JSONObject().put("pattern", pattern.name)
+        enqueue { sendToWatch(SmartwatchProtocol.PATH_HAPTIC_TRIGGER, payload) }
+    }
+
+    private suspend fun sendToWatch(path: String, payload: JSONObject) {
+        val bytes = payload.toString().toByteArray(Charsets.UTF_8)
+        reachableWearAppNodeIds().forEach { nodeId ->
+            messageClient.sendMessage(nodeId, path, bytes).await()
+        }
+    }
+
+    private suspend fun reachableWearAppNodeIds(): Set<String> {
+        return capabilityClient
+            .getCapability(SmartwatchProtocol.CAPABILITY_WEAR_APP, CapabilityClient.FILTER_REACHABLE)
+            .await()
+            .nodes
+            .mapTo(mutableSetOf()) { it.id }
+    }
+
+    private suspend fun publishSessionState(
+        state: String,
+        session: FocusSession?,
+        endTimestampMs: Long
     ) {
-        scope.launch {
-            val payload = JSONObject().apply {
-                put("action", "START")
-                put("activityId", activityType.id)
-                put("activityName", activityType.displayName)
-                put("durationMinutes", durationMinutes)
-                put("totalMillis", totalMillis)
-                put("timestamp", System.currentTimeMillis())
-            }.toString().toByteArray()
+        val request = PutDataMapRequest.create(SmartwatchProtocol.DATA_PATH_ACTIVE_SESSION).apply {
+            dataMap.putString("state", state)
+            dataMap.putString("activityId", session?.activityType?.id.orEmpty())
+            dataMap.putString("activityName", session?.activityType?.displayName.orEmpty())
+            dataMap.putInt("durationMinutes", session?.durationMinutes ?: 0)
+            dataMap.putLong("endTimestampMs", endTimestampMs)
+            // Garantiza que el cambio se notifique aunque el resto de campos coincida
+            dataMap.putLong("updatedAtMs", clock.nowMs())
+        }.asPutDataRequest().setUrgent()
 
-            broadcastMessage(SmartwatchProtocol.PATH_START_SESSION, payload)
-            syncActiveSessionData(activityType, durationMinutes, totalMillis)
+        dataClient.putDataItem(request).await()
+    }
 
-            // Inicia el detector de inactividad física
-            sedentarismDetector.startMonitoring(
-                thresholdMinutes = _connectedWatch.value.sedentarismThresholdMinutes
-            )
+    private suspend fun publishPreferences(current: SmartwatchSettings) {
+        val request = PutDataMapRequest.create(SmartwatchProtocol.DATA_PATH_PREFERENCES).apply {
+            dataMap.putBoolean("hapticsEnabled", current.hapticsEnabled)
+            dataMap.putBoolean("inactivityAlertsEnabled", current.inactivityAlertsEnabled)
+            dataMap.putInt("inactivityThresholdMinutes", current.inactivityThresholdMinutes)
+            dataMap.putBoolean("restIndicatorEnabled", current.restIndicatorEnabled)
+        }.asPutDataRequest()
 
-            // Vibración inicial en muñeca
-            if (_connectedWatch.value.hapticVibrationsEnabled) {
-                hapticHelper.onSessionStart()
-                sendHapticToWatch(SmartwatchProtocol.HapticPattern.SESSION_START)
-            }
-        }
+        dataClient.putDataItem(request).await()
+    }
+
+    private fun enqueue(task: suspend () -> Unit) {
+        outbox.trySend(task)
     }
 
     /**
-     * Sincroniza el avance en tiempo real (milisegundos restantes y fracción de progreso).
+     * Ejecuta una llamada a la Data Layer. Falla de forma habitual si el reloj pierde señal o
+     * el dispositivo no tiene la API de Wear OS, así que el error solo se registra.
+     *
+     * @return El resultado de la llamada, o null si falló.
      */
-    fun notifyProgress(
-        remainingMillis: Long,
-        progressFraction: Float,
-        activityType: FocusActivityType
-    ) {
-        scope.launch {
-            val payload = JSONObject().apply {
-                put("remainingMillis", remainingMillis)
-                put("progress", progressFraction)
-                put("activity", activityType.displayName)
-            }.toString().toByteArray()
-
-            broadcastMessage(SmartwatchProtocol.PATH_PROGRESS_UPDATE, payload)
-
-            // Evalúa inactividad física
-            if (_connectedWatch.value.sedentarismAlertEnabled) {
-                val alerted = sedentarismDetector.evaluateStillness()
-                if (alerted) {
-                    notifyInactivityDetected()
-                }
-            }
+    private suspend fun <T> runWearableCall(call: suspend () -> T): T? {
+        return try {
+            call()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.d(TAG, "Wearable call failed: ${e.message}")
+            null
         }
     }
 
-    /**
-     * Notifica al reloj que se ha detectado prolongada falta de movimiento ("Mucho tiempo sin moverte").
-     */
-    fun notifyInactivityDetected() {
-        scope.launch {
-            val payload = JSONObject().apply {
-                put("type", "INACTIVITY")
-                put("message", "Llevas mucho tiempo sin moverte. ¡Estira tu cuerpo!")
-            }.toString().toByteArray()
-
-            broadcastMessage(SmartwatchProtocol.PATH_INACTIVITY_ALERT, payload)
-            if (_connectedWatch.value.hapticVibrationsEnabled) {
-                hapticHelper.onInactivityAlert()
-                sendHapticToWatch(SmartwatchProtocol.HapticPattern.INACTIVITY_NUDGE)
-            }
-        }
-    }
-
-    /**
-     * Notifica al reloj que la sesión terminó y es momento de descansar ("Te indica cuándo descansar").
-     */
-    fun notifyRestTime(breakDurationMinutes: Int) {
-        scope.launch {
-            val payload = JSONObject().apply {
-                put("type", "REST_BREAK")
-                put("breakMinutes", breakDurationMinutes)
-                put("message", "¡Gran trabajo! Momento de descansar la mente y los ojos.")
-            }.toString().toByteArray()
-
-            broadcastMessage(SmartwatchProtocol.PATH_REST_ALERT, payload)
-            if (_connectedWatch.value.hapticVibrationsEnabled) {
-                hapticHelper.onRestTimeAlert()
-                sendHapticToWatch(SmartwatchProtocol.HapticPattern.REST_TIME)
-            }
-            sedentarismDetector.stopMonitoring()
-        }
-    }
-
-    /**
-     * Sincroniza la detención o interrupción de la sesión.
-     */
-    fun notifySessionStopped() {
-        scope.launch {
-            val payload = JSONObject().apply {
-                put("action", "STOP")
-            }.toString().toByteArray()
-
-            broadcastMessage(SmartwatchProtocol.PATH_STOP_SESSION, payload)
-            sedentarismDetector.stopMonitoring()
-        }
-    }
-
-    /**
-     * Envía una instrucción de patrón háptico directo al Smartwatch físico.
-     */
-    private suspend fun sendHapticToWatch(pattern: SmartwatchProtocol.HapticPattern) {
-        try {
-            val payload = JSONObject().apply {
-                put("pattern", pattern.name)
-                put("description", pattern.description)
-            }.toString().toByteArray()
-            broadcastMessage(SmartwatchProtocol.PATH_HAPTIC_TRIGGER, payload)
-        } catch (_: Exception) {
-            // Silencioso
-        }
-    }
-
-    /**
-     * Envía un mensaje a todos los nodos Wear OS conectados.
-     */
-    private suspend fun broadcastMessage(path: String, data: ByteArray) {
-        try {
-            val nodes = nodeClient.connectedNodes.await()
-            for (node in nodes) {
-                messageClient.sendMessage(node.id, path, data).await()
-            }
-        } catch (_: Exception) {
-            // Silencioso para garantizar que la app nunca falle si el reloj pierde señal temporalmente
-        }
-    }
-
-    /**
-     * Sincroniza el mapa de datos continuo a través de DataClient.
-     */
-    private suspend fun syncActiveSessionData(
-        activity: FocusActivityType,
-        durationMinutes: Int,
-        totalMillis: Long
-    ) {
-        try {
-            val putDataReq = PutDataMapRequest.create(SmartwatchProtocol.DATA_PATH_ACTIVE_SESSION).apply {
-                dataMap.putString("activity", activity.displayName)
-                dataMap.putInt("durationMinutes", durationMinutes)
-                dataMap.putLong("startTimeMs", System.currentTimeMillis())
-                dataMap.putLong("totalMillis", totalMillis)
-            }.asPutDataRequest().setUrgent()
-
-            dataClient.putDataItem(putDataReq).await()
-        } catch (_: Exception) {
-            // Ignorado si no hay receptor activo en ese momento
-        }
-    }
-
-    /**
-     * Registra un evento de movimiento recibido del reloj físico o de prueba.
-     */
-    fun simulateMovement() {
-        sedentarismDetector.onMovementDetected()
-    }
-
-    /**
-     * Prueba la vibración háptica coordinada en el reloj físico y en el teléfono.
-     */
-    fun testHapticVibration() {
-        hapticHelper.onSessionStart()
-        scope.launch {
-            sendHapticToWatch(SmartwatchProtocol.HapticPattern.SESSION_START)
-        }
+    private companion object {
+        const val TAG = "SmartwatchSync"
+        const val STATE_FOCUSING = "FOCUSING"
+        const val STATE_RESTING = "RESTING"
+        const val STATE_IDLE = "IDLE"
+        val EMPTY_PAYLOAD = ByteArray(0)
     }
 }

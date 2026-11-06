@@ -1,5 +1,9 @@
 package com.focus.app.feature.home
 
+import android.Manifest
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
@@ -18,6 +22,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -33,15 +38,20 @@ import androidx.compose.material.icons.rounded.Watch
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -51,6 +61,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
+import com.focus.app.R
 import com.focus.app.core.designsystem.FocusAccent
 import com.focus.app.core.designsystem.FocusAccentDark
 import com.focus.app.core.designsystem.FocusAccentLight
@@ -73,13 +84,14 @@ import com.focus.app.core.designsystem.components.FocusSecondaryButton
 import com.focus.app.core.designsystem.components.SmartwatchLivePreview
 import com.focus.app.core.designsystem.components.SmartwatchStatusCard
 import com.focus.app.domain.model.FocusActivityType
+import com.focus.app.platform.accessibility.FocusAccessibilityService
 
 /**
- * Pantalla principal de Focus adaptada como complemento para Smartwatch (Wear OS).
+ * Pantalla principal de Focus.
  *
- * Permite seleccionar la actividad previa:
- * ¿Qué vas a hacer? [ Estudiar ] [ Trabajar ] [ Leer ]
- * Seleccionar duración (ej. 45 min) y monitorear la conexión con el reloj.
+ * Permite elegir la actividad y la duración, y monitorear la conexión con el reloj.
+ * Si hay una sesión en curso (iniciada aquí, desde el reloj o restaurada tras cerrar
+ * la app), navega automáticamente a la pantalla de sesión.
  */
 @Composable
 fun HomeScreen(
@@ -89,19 +101,36 @@ fun HomeScreen(
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val navigateToSession by viewModel.navigateToSession.collectAsStateWithLifecycle()
     val lifecycleOwner = LocalLifecycleOwner.current
+    val context = LocalContext.current
+    val snackbarHostState = remember { SnackbarHostState() }
 
-    LaunchedEffect(navigateToSession) {
-        if (navigateToSession) {
-            viewModel.onNavigatedToSession()
-            onNavigateToSession()
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+        // Sin el permiso la sesión funciona igual, solo que sin notificación visible
+        onResult = {}
+    )
+
+    LaunchedEffect(Unit) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+
+    LaunchedEffect(uiState.hasOngoingSession) {
+        if (uiState.hasOngoingSession) onNavigateToSession()
+    }
+
+    LaunchedEffect(uiState.errorMessage) {
+        uiState.errorMessage?.let { message ->
+            snackbarHostState.showSnackbar(message)
+            viewModel.onErrorShown()
         }
     }
 
     LaunchedEffect(lifecycleOwner) {
         lifecycleOwner.repeatOnLifecycle(Lifecycle.State.RESUMED) {
-            viewModel.checkAccessibilityService()
+            viewModel.onScreenResumed()
         }
     }
 
@@ -110,10 +139,14 @@ fun HomeScreen(
         onActivitySelected = viewModel::onActivitySelected,
         onDurationSelected = viewModel::onDurationSelected,
         onTestSmartwatchVibration = viewModel::onTestSmartwatchVibration,
-        onScanForWatch = viewModel::onScanForRealWatch,
+        onScanForWatch = viewModel::onScanForWatch,
         onStartSession = viewModel::onStartSession,
         onNavigateToAppSelection = onNavigateToAppSelection,
-        onNavigateToSettings = onNavigateToSettings
+        onNavigateToSettings = onNavigateToSettings,
+        onOpenAccessibilitySettings = {
+            context.startActivity(FocusAccessibilityService.openAccessibilitySettingsIntent())
+        },
+        snackbarHostState = snackbarHostState
     )
 }
 
@@ -126,7 +159,9 @@ private fun HomeScreenContent(
     onScanForWatch: () -> Unit,
     onStartSession: () -> Unit,
     onNavigateToAppSelection: () -> Unit,
-    onNavigateToSettings: () -> Unit
+    onNavigateToSettings: () -> Unit,
+    onOpenAccessibilitySettings: () -> Unit,
+    snackbarHostState: SnackbarHostState
 ) {
     Box(
         modifier = Modifier
@@ -160,7 +195,7 @@ private fun HomeScreenContent(
             Spacer(modifier = Modifier.height(6.dp))
 
             Text(
-                text = "Protege tu atención en tu celular y tu reloj.",
+                text = stringResource(R.string.home_subtitle),
                 style = MaterialTheme.typography.bodyLarge,
                 color = FocusOnSurfaceVariant
             )
@@ -176,10 +211,10 @@ private fun HomeScreenContent(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // ── Pregunta Principal: ¿Qué vas a hacer? ────────────────────────
+            // ── Pregunta principal: qué va a hacer el usuario ─────────────────
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(
-                    text = "¿Qué vas a hacer?",
+                    text = stringResource(R.string.home_activity_question),
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
                     color = FocusOnSurface
                 )
@@ -227,11 +262,18 @@ private fun HomeScreenContent(
                 exit = shrinkVertically() + fadeOut()
             ) {
                 Spacer(modifier = Modifier.height(16.dp))
-                AccessibilityWarningCard()
+                AccessibilityWarningCard(onClick = onOpenAccessibilitySettings)
             }
 
             Spacer(modifier = Modifier.height(32.dp))
         }
+
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .navigationBarsPadding()
+        )
     }
 }
 
@@ -272,7 +314,7 @@ private fun HomeTopBar(
                         modifier = Modifier.size(12.dp)
                     )
                     Text(
-                        text = "COMPANION",
+                        text = stringResource(R.string.home_badge_companion),
                         fontSize = 9.sp,
                         fontWeight = FontWeight.Bold,
                         color = FocusAccentLight
@@ -287,7 +329,7 @@ private fun HomeTopBar(
         ) {
             Icon(
                 imageVector = Icons.Outlined.Settings,
-                contentDescription = "Settings",
+                contentDescription = stringResource(R.string.common_settings),
                 tint = FocusOnSurfaceVariant,
                 modifier = Modifier.size(24.dp)
             )
@@ -307,7 +349,7 @@ private fun DurationSection(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "Duración de Enfoque",
+                text = stringResource(R.string.home_duration_label),
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
                 color = FocusOnSurface
             )
@@ -347,38 +389,58 @@ private fun SessionStatusCard(uiState: HomeUiState) {
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Text(
-                text = "Configuración Sincronizada",
+                text = stringResource(R.string.home_summary_title),
                 style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
                 color = FocusOnSurface
             )
 
             StatusRow(
-                label = "Actividad elegida",
+                label = stringResource(R.string.home_summary_activity),
                 value = uiState.selectedActivity.displayName,
                 isPositive = true
             )
 
             StatusRow(
-                label = "Apps a bloquear en celular",
+                label = stringResource(R.string.home_summary_apps),
                 value = if (uiState.selectedAppCount == 0) {
-                    "Ninguna (Modo Zen solo reloj)"
+                    stringResource(R.string.home_summary_apps_none)
                 } else {
-                    "${uiState.selectedAppCount} bloqueadas"
+                    stringResource(R.string.home_summary_apps_count, uiState.selectedAppCount)
                 },
                 isPositive = uiState.selectedAppCount > 0
             )
 
             StatusRow(
-                label = "Servicio de bloqueo",
-                value = if (uiState.isAccessibilityServiceEnabled) "Activo" else "Deshabilitado",
+                label = stringResource(R.string.home_summary_service),
+                value = stringResource(
+                    if (uiState.isAccessibilityServiceEnabled) {
+                        R.string.home_summary_service_active
+                    } else {
+                        R.string.home_summary_service_disabled
+                    }
+                ),
                 isPositive = uiState.isAccessibilityServiceEnabled
             )
 
             SessionReadinessBadge(
-                message = uiState.sessionReadinessMessage,
-                isReady = uiState.canStartTimerOnly
+                message = readinessMessage(uiState),
+                isReady = uiState.readiness == SessionReadiness.READY ||
+                    uiState.readiness == SessionReadiness.READY_WITHOUT_WATCH
             )
         }
+    }
+}
+
+@Composable
+private fun readinessMessage(uiState: HomeUiState): String {
+    return when (uiState.readiness) {
+        SessionReadiness.READY -> stringResource(
+            R.string.home_readiness_ready,
+            uiState.selectedActivity.displayName
+        )
+        SessionReadiness.READY_WITHOUT_WATCH -> stringResource(R.string.home_readiness_no_watch)
+        SessionReadiness.NEEDS_ACCESSIBILITY -> stringResource(R.string.home_readiness_needs_accessibility)
+        SessionReadiness.TIMER_ONLY -> stringResource(R.string.home_readiness_timer_only)
     }
 }
 
@@ -459,16 +521,15 @@ private fun ActionSection(
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         FocusPrimaryButton(
-            text = "Iniciar en Celular y Smartwatch",
-            onClick = onStartSession,
-            enabled = uiState.canStartTimerOnly
+            text = stringResource(R.string.home_start_session),
+            onClick = onStartSession
         )
 
         FocusSecondaryButton(
             text = if (uiState.selectedAppCount == 0) {
-                "Elegir Apps a Bloquear"
+                stringResource(R.string.home_select_apps)
             } else {
-                "Apps Bloqueadas (${uiState.selectedAppCount})"
+                stringResource(R.string.home_blocked_apps, uiState.selectedAppCount)
             },
             onClick = onNavigateToAppSelection
         )
@@ -476,8 +537,9 @@ private fun ActionSection(
 }
 
 @Composable
-private fun AccessibilityWarningCard() {
+private fun AccessibilityWarningCard(onClick: () -> Unit) {
     Surface(
+        onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.medium,
         color = FocusWarningSubtle,
@@ -495,7 +557,7 @@ private fun AccessibilityWarningCard() {
                 modifier = Modifier.size(20.dp)
             )
             Text(
-                text = "El servicio de accesibilidad está inactivo. El reloj y el temporizador funcionarán, pero no se bloquearán apps en el celular. Actívalo en Ajustes.",
+                text = stringResource(R.string.home_accessibility_warning),
                 style = MaterialTheme.typography.bodySmall,
                 color = FocusWarning
             )
@@ -503,11 +565,12 @@ private fun AccessibilityWarningCard() {
     }
 }
 
+@Composable
 private fun formatDuration(minutes: Int): String {
     return when {
-        minutes < 60 -> "$minutes minutos"
-        minutes == 60 -> "1 hora"
-        minutes % 60 == 0 -> "${minutes / 60} horas"
-        else -> "${minutes / 60}h ${minutes % 60}m"
+        minutes < 60 -> stringResource(R.string.duration_minutes, minutes)
+        minutes == 60 -> stringResource(R.string.duration_one_hour)
+        minutes % 60 == 0 -> stringResource(R.string.duration_hours, minutes / 60)
+        else -> stringResource(R.string.duration_hours_minutes, minutes / 60, minutes % 60)
     }
 }

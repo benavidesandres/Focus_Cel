@@ -1,6 +1,7 @@
 package com.focus.app.data.mapper
 
 import com.focus.app.data.local.preferences.FocusPreferencesDataSource
+import com.focus.app.domain.model.FocusActivityType
 import com.focus.app.domain.model.FocusSession
 import com.focus.app.domain.model.SessionStatus
 
@@ -18,7 +19,7 @@ object SessionMapper {
      */
     fun toDomain(snapshot: FocusPreferencesDataSource.SessionSnapshot): FocusSession? {
         val status = mapStatus(snapshot.status) ?: return null
-        val activity = com.focus.app.domain.model.FocusActivityType.fromId(snapshot.activityType)
+        val activity = FocusActivityType.fromId(snapshot.activityType)
 
         return FocusSession(
             id = snapshot.id,
@@ -32,11 +33,10 @@ object SessionMapper {
     }
 
     /**
-     * Convierte un modelo de dominio FocusSession a los parámetros necesarios
-     * para persistirlo en DataStore.
+     * Convierte el estado del dominio a la cadena que se persiste en DataStore.
      *
-     * @param session La sesión del dominio a persistir.
-     * @return Par de (status string) listo para DataSource.
+     * @param status El estado del dominio.
+     * @return La cadena lista para guardar.
      */
     fun toStatusString(status: SessionStatus): String {
         return status.name
@@ -49,11 +49,7 @@ object SessionMapper {
      * @return El enum SessionStatus, o null si el valor es desconocido.
      */
     private fun mapStatus(statusStr: String): SessionStatus? {
-        return try {
-            SessionStatus.valueOf(statusStr)
-        } catch (e: IllegalArgumentException) {
-            // Estado desconocido — probablemente datos corruptos o de versión anterior
-            null
-        }
+        // Un estado desconocido indica datos corruptos o de una versión anterior
+        return SessionStatus.entries.firstOrNull { it.name == statusStr }
     }
 }

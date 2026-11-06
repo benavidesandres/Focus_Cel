@@ -3,7 +3,6 @@ package com.focus.app.feature.appselection
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -41,18 +40,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.focus.app.R
 import com.focus.app.core.designsystem.FocusAccent
-import com.focus.app.core.designsystem.FocusAccentSubtle
 import com.focus.app.core.designsystem.FocusBackground
 import com.focus.app.core.designsystem.FocusBorder
 import com.focus.app.core.designsystem.FocusCard
@@ -163,9 +158,9 @@ fun AppSelectionScreen(
                             icon = Icons.Rounded.SearchOff,
                             title = stringResource(R.string.app_selection_empty),
                             description = if (uiState.isSearching) {
-                                "No apps match \"${uiState.searchQuery}\""
+                                stringResource(R.string.app_selection_no_match, uiState.searchQuery)
                             } else {
-                                "No launchable third-party apps found"
+                                stringResource(R.string.app_selection_no_apps)
                             },
                             modifier = Modifier.fillMaxSize()
                         )
@@ -215,7 +210,7 @@ fun AppSelectionScreen(
                 ) {
                     FocusPrimaryButton(
                         text = if (uiState.selectedCount > 0) {
-                            "${stringResource(R.string.app_selection_done)} (${uiState.selectedCount})"
+                            stringResource(R.string.app_selection_done_count, uiState.selectedCount)
                         } else {
                             stringResource(R.string.app_selection_done)
                         },
@@ -246,7 +241,7 @@ private fun AppSelectionTopBar(
         IconButton(onClick = onNavigateBack) {
             Icon(
                 imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                contentDescription = "Back",
+                contentDescription = stringResource(R.string.common_back),
                 tint = FocusOnSurface
             )
         }
@@ -316,7 +311,7 @@ private fun AppSearchBar(
                 IconButton(onClick = onClearQuery) {
                     Icon(
                         imageVector = Icons.Rounded.Clear,
-                        contentDescription = "Clear search",
+                        contentDescription = stringResource(R.string.app_selection_search_clear),
                         tint = FocusOnSurfaceVariant,
                         modifier = Modifier.size(20.dp)
                     )

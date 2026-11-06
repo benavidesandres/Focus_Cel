@@ -1,5 +1,6 @@
 package com.focus.app.domain.usecase
 
+import com.focus.app.domain.model.FocusActivityType
 import com.focus.app.domain.model.FocusSession
 import com.focus.app.domain.model.SessionStatus
 import com.focus.app.domain.repository.FocusSessionRepository
@@ -17,26 +18,27 @@ class StartFocusSessionUseCase @Inject constructor(
      *
      * @param durationMinutes Duración de la sesión en minutos (debe ser positiva).
      * @param selectedPackageNames Paquetes seleccionados para restricción.
+     * @param activityType Actividad elegida por el usuario.
      * @param nowMs Timestamp actual en milisegundos (inyectado para testabilidad).
      * @return La sesión creada como éxito, o un error descriptivo.
      */
     suspend operator fun invoke(
         durationMinutes: Int,
         selectedPackageNames: Set<String>,
-        activityType: com.focus.app.domain.model.FocusActivityType = com.focus.app.domain.model.FocusActivityType.TRABAJAR,
+        activityType: FocusActivityType = FocusActivityType.WORK,
         nowMs: Long = System.currentTimeMillis()
     ): Result<FocusSession> {
         // Validación: la duración debe ser positiva
         if (durationMinutes <= 0) {
             return Result.failure(
-                IllegalArgumentException("La duración de la sesión debe ser mayor que cero.")
+                IllegalArgumentException("Session duration must be greater than zero.")
             )
         }
 
         // Validación: la duración no puede superar 8 horas (límite razonable)
         if (durationMinutes > 480) {
             return Result.failure(
-                IllegalArgumentException("La duración de la sesión no puede superar 8 horas.")
+                IllegalArgumentException("Session duration cannot exceed 8 hours.")
             )
         }
 
@@ -51,8 +53,7 @@ class StartFocusSessionUseCase @Inject constructor(
             durationMinutes = durationMinutes,
             selectedPackageNames = selectedPackageNames,
             status = SessionStatus.ACTIVE,
-            activityType = activityType,
-            breakDurationMinutes = activityType.recommendedRestMinutes
+            activityType = activityType
         )
 
         sessionRepository.saveSession(session)

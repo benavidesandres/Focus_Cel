@@ -1,7 +1,10 @@
 package com.focus.app.platform.accessibility
 
+import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.compose.animation.AnimatedVisibility
@@ -23,20 +26,25 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.focus.app.R
 import com.focus.app.core.designsystem.FocusAccent
 import com.focus.app.core.designsystem.FocusBackground
 import com.focus.app.core.designsystem.FocusOnSurface
 import com.focus.app.core.designsystem.FocusOnSurfaceVariant
 import com.focus.app.core.designsystem.FocusTheme
 import com.focus.app.core.designsystem.components.FocusDestructiveButton
-import com.focus.app.core.designsystem.components.FocusTextButton
+import com.focus.app.core.designsystem.components.FocusPrimaryButton
 import dagger.hilt.android.AndroidEntryPoint
 
 /**
@@ -48,45 +56,77 @@ import dagger.hilt.android.AndroidEntryPoint
  *
  * Diseño:
  * - Pantalla completa oscura y minimalista para reforzar el mensaje.
- * - Muestra el tiempo restante de sesión.
- * - Permite al usuario regresar o terminar la sesión.
- * - No impide acceso a Ajustes del sistema ni llamadas de emergencia.
+ * - Muestra la app bloqueada y el tiempo restante de sesión.
+ * - Salir siempre lleva al inicio: volver atrás mostraría de nuevo la app bloqueada.
+ * - Se cierra sola si la sesión termina mientras está visible.
  */
 @AndroidEntryPoint
 class RestrictionActivity : ComponentActivity() {
 
     companion object {
         const val EXTRA_BLOCKED_PACKAGE = "extra_blocked_package"
-        const val EXTRA_SESSION_ID = "extra_session_id"
     }
 
     private val viewModel: RestrictionViewModel by viewModels()
 
+    private var blockedAppName by mutableStateOf("")
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Obtiene información de la app bloqueada del intent
-        val blockedPackage = intent.getStringExtra(EXTRA_BLOCKED_PACKAGE) ?: ""
-        val sessionId = intent.getLongExtra(EXTRA_SESSION_ID, -1L)
-
-        viewModel.initialize(blockedPackage, sessionId)
+        blockedAppName = resolveAppName(intent)
 
         // Extiende el contenido hasta los bordes de la pantalla
         WindowCompat.setDecorFitsSystemWindows(window, false)
 
+        onBackPressedDispatcher.addCallback(
+            this,
+            object : OnBackPressedCallback(true) {
+                override fun handleOnBackPressed() = goToHomeScreen()
+            }
+        )
+
         setContent {
             FocusTheme {
-                val uiState by viewModel.uiState.collectAsState()
+                val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+
+                LaunchedEffect(uiState.isSessionActive) {
+                    if (!uiState.isSessionActive) finish()
+                }
 
                 RestrictionScreen(
                     uiState = uiState,
-                    onGoBack = { finish() },
-                    onEndSession = {
-                        viewModel.endSession()
-                        finish()
-                    }
+                    blockedAppName = blockedAppName,
+                    onGoBack = ::goToHomeScreen,
+                    onEndSession = viewModel::onEndSession
                 )
             }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        // La actividad es singleTop: otra app bloqueada puede reutilizar esta instancia
+        setIntent(intent)
+        blockedAppName = resolveAppName(intent)
+    }
+
+    private fun goToHomeScreen() {
+        startActivity(
+            Intent(Intent.ACTION_MAIN)
+                .addCategory(Intent.CATEGORY_HOME)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        )
+        finish()
+    }
+
+    private fun resolveAppName(intent: Intent): String {
+        val packageName = intent.getStringExtra(EXTRA_BLOCKED_PACKAGE).orEmpty()
+        return try {
+            val appInfo = packageManager.getApplicationInfo(packageName, 0)
+            packageManager.getApplicationLabel(appInfo).toString()
+        } catch (_: PackageManager.NameNotFoundException) {
+            ""
         }
     }
 }
@@ -97,6 +137,7 @@ class RestrictionActivity : ComponentActivity() {
 @Composable
 private fun RestrictionScreen(
     uiState: RestrictionUiState,
+    blockedAppName: String,
     onGoBack: () -> Unit,
     onEndSession: () -> Unit
 ) {
@@ -125,7 +166,7 @@ private fun RestrictionScreen(
 
             // Título principal de restricción
             Text(
-                text = "You're in Focus mode",
+                text = stringResource(R.string.restriction_title),
                 style = MaterialTheme.typography.headlineMedium,
                 color = FocusOnSurface,
                 textAlign = TextAlign.Center
@@ -135,7 +176,11 @@ private fun RestrictionScreen(
 
             // Mensaje explicativo
             Text(
-                text = "You selected this app to restrict during your focus session. Stay on track!",
+                text = if (blockedAppName.isNotEmpty()) {
+                    stringResource(R.string.restriction_message_named, blockedAppName)
+                } else {
+                    stringResource(R.string.restriction_message)
+                },
                 style = MaterialTheme.typography.bodyLarge,
                 color = FocusOnSurfaceVariant,
                 textAlign = TextAlign.Center
@@ -150,7 +195,7 @@ private fun RestrictionScreen(
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Spacer(modifier = Modifier.height(32.dp))
                     Text(
-                        text = "Time remaining",
+                        text = stringResource(R.string.restriction_time_remaining),
                         style = MaterialTheme.typography.labelMedium,
                         color = FocusOnSurfaceVariant
                     )
@@ -164,9 +209,9 @@ private fun RestrictionScreen(
 
             Spacer(modifier = Modifier.height(48.dp))
 
-            // Botón para regresar a la pantalla anterior
-            com.focus.app.core.designsystem.components.FocusPrimaryButton(
-                text = "Go Back",
+            // Botón para salir de la app bloqueada hacia el inicio
+            FocusPrimaryButton(
+                text = stringResource(R.string.restriction_go_back),
                 onClick = onGoBack
             )
 
@@ -174,7 +219,7 @@ private fun RestrictionScreen(
 
             // Botón para terminar la sesión (acción destructiva)
             FocusDestructiveButton(
-                text = "End Session",
+                text = stringResource(R.string.restriction_end_session),
                 onClick = onEndSession
             )
         }

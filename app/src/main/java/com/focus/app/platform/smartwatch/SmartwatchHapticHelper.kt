@@ -11,74 +11,37 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Gestor del motor háptico para la experiencia de concentración.
- * Ejecuta patrones de vibración tanto en el teléfono móvil como
- * coordinándolos hacia el smartwatch para que el usuario reciba
- * retroalimentación táctil sin mirar la pantalla constantemente.
+ * Reproduce en el teléfono los patrones de vibración que también se envían al reloj,
+ * para que el usuario reciba retroalimentación táctil sin mirar la pantalla.
  */
 @Singleton
 class SmartwatchHapticHelper @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
     private val vibrator: Vibrator? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        val vibratorManager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
-        vibratorManager?.defaultVibrator
+        context.getSystemService(VibratorManager::class.java)?.defaultVibrator
     } else {
         @Suppress("DEPRECATION")
-        context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+        context.getSystemService(Vibrator::class.java)
     }
 
     /**
      * Ejecuta el patrón háptico especificado.
      *
-     * @param pattern El patrón de vibración definido en [SmartwatchProtocol.HapticPattern].
+     * @param pattern El patrón de vibración a reproducir.
      */
-    fun playPattern(pattern: SmartwatchProtocol.HapticPattern) {
-        if (vibrator == null || !vibrator.hasVibrator()) return
+    fun play(pattern: SmartwatchProtocol.HapticPattern) {
+        val deviceVibrator = vibrator?.takeIf { it.hasVibrator() } ?: return
 
-        val timings = pattern.patternMs
+        val timings = pattern.timingsMs
         val amplitudes = IntArray(timings.size) { index ->
-            if (index % 2 == 0) 0 else 220
+            if (index % 2 == 0) 0 else VIBRATION_AMPLITUDE
         }
-
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                val effect = VibrationEffect.createWaveform(timings, amplitudes, -1)
-                vibrator.vibrate(effect)
-            } else {
-                @Suppress("DEPRECATION")
-                vibrator.vibrate(timings, -1)
-            }
-        } catch (_: Exception) {
-            // Manejo seguro en caso de restricciones de hardware
-        }
+        deviceVibrator.vibrate(VibrationEffect.createWaveform(timings, amplitudes, NO_REPEAT))
     }
 
-    /**
-     * Vibración háptica al iniciar la sesión de concentración (Doble pulso).
-     */
-    fun onSessionStart() {
-        playPattern(SmartwatchProtocol.HapticPattern.SESSION_START)
-    }
-
-    /**
-     * Vibración suave al alcanzar la mitad del tiempo de enfoque.
-     */
-    fun onHalfwayMilestone() {
-        playPattern(SmartwatchProtocol.HapticPattern.HALFWAY_MILESTONE)
-    }
-
-    /**
-     * Vibración especial cuando el smartwatch detecta inactividad prolongada ("Mucho tiempo sin moverte").
-     */
-    fun onInactivityAlert() {
-        playPattern(SmartwatchProtocol.HapticPattern.INACTIVITY_NUDGE)
-    }
-
-    /**
-     * Vibración reconfortante al terminar el tiempo indicando momento de descansar.
-     */
-    fun onRestTimeAlert() {
-        playPattern(SmartwatchProtocol.HapticPattern.REST_TIME)
+    private companion object {
+        const val VIBRATION_AMPLITUDE = 220
+        const val NO_REPEAT = -1
     }
 }

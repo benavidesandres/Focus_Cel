@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.DirectionsWalk
 import androidx.compose.material.icons.rounded.SelfImprovement
 import androidx.compose.material.icons.rounded.Vibration
 import androidx.compose.material3.Icon
@@ -36,13 +35,14 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.focus.app.R
 import com.focus.app.core.designsystem.FocusAccent
-import com.focus.app.core.designsystem.FocusAccentBorder
 import com.focus.app.core.designsystem.FocusAccentLight
 import com.focus.app.core.designsystem.FocusBorder
 import com.focus.app.core.designsystem.FocusCard
@@ -63,7 +63,7 @@ fun SmartwatchLivePreview(
     activity: FocusActivityType,
     timeLabel: String,
     progress: Float = 0f,
-    isSedentaryWarning: Boolean = false,
+    isInactivityWarning: Boolean = false,
     isRestMode: Boolean = false,
     modifier: Modifier = Modifier
 ) {
@@ -87,12 +87,12 @@ fun SmartwatchLivePreview(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Pantalla del Smartwatch Focus",
+                    text = stringResource(R.string.watch_preview_title),
                     style = MaterialTheme.typography.titleSmall,
                     color = FocusOnSurface
                 )
                 Text(
-                    text = "Modo Ultra-Simple",
+                    text = stringResource(R.string.watch_preview_mode),
                     style = MaterialTheme.typography.labelSmall,
                     color = FocusAccentLight
                 )
@@ -130,7 +130,7 @@ fun SmartwatchLivePreview(
                 val ringColor by animateColorAsState(
                     targetValue = when {
                         isRestMode -> FocusSuccess
-                        isSedentaryWarning -> FocusWarning
+                        isInactivityWarning -> FocusWarning
                         else -> FocusAccent
                     },
                     label = "WatchRingColor"
@@ -169,8 +169,8 @@ fun SmartwatchLivePreview(
                     // Actividad o modo
                     Text(
                         text = when {
-                            isRestMode -> "DESCANSO"
-                            isSedentaryWarning -> "¡MUÉVETE!"
+                            isRestMode -> stringResource(R.string.watch_preview_rest)
+                            isInactivityWarning -> stringResource(R.string.watch_preview_move)
                             else -> activity.displayName.uppercase()
                         },
                         fontSize = 10.sp,
@@ -178,7 +178,7 @@ fun SmartwatchLivePreview(
                         letterSpacing = 2.sp,
                         color = when {
                             isRestMode -> FocusSuccess
-                            isSedentaryWarning -> FocusWarning
+                            isInactivityWarning -> FocusWarning
                             else -> FocusAccentLight
                         }
                     )
@@ -210,9 +210,9 @@ fun SmartwatchLivePreview(
                         )
                         Text(
                             text = when {
-                                isRestMode -> "Respira hondo"
-                                isSedentaryWarning -> "Ponte de pie"
-                                else -> "Cero alertas"
+                                isRestMode -> stringResource(R.string.watch_preview_hint_rest)
+                                isInactivityWarning -> stringResource(R.string.watch_preview_hint_move)
+                                else -> stringResource(R.string.watch_preview_hint_focus)
                             },
                             fontSize = 9.sp,
                             color = Color(0xFF9CA3AF),
@@ -224,7 +224,7 @@ fun SmartwatchLivePreview(
 
             // Explicación de valor bajo la esfera
             Text(
-                text = "Tu atención se protege: la pantalla permanece oscura y el reloj te avisa por vibración háptica cuándo descansar o moverte.",
+                text = stringResource(R.string.watch_preview_description),
                 style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
                 color = FocusOnSurfaceVariant,
                 textAlign = TextAlign.Center,

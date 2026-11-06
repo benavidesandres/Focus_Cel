@@ -11,8 +11,8 @@ import kotlinx.coroutines.flow.Flow
 interface FocusSessionRepository {
 
     /**
-     * Flujo observable de la sesión activa actual.
-     * Emite null cuando no hay sesión activa o tras completarse.
+     * Flujo observable de la sesión persistida.
+     * Emite null cuando no hay ninguna sesión guardada.
      */
     val activeSession: Flow<FocusSession?>
 

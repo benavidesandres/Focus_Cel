@@ -23,8 +23,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.automirrored.rounded.DirectionsWalk
+import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.PrivacyTip
 import androidx.compose.material.icons.rounded.SelfImprovement
 import androidx.compose.material.icons.rounded.Vibration
@@ -70,10 +70,12 @@ import com.focus.app.core.designsystem.FocusWarning
 import com.focus.app.core.designsystem.FocusWarningSubtle
 import com.focus.app.core.designsystem.components.FocusDurationSelector
 import com.focus.app.core.designsystem.components.FocusSecondaryButton
+import com.focus.app.core.designsystem.components.smartwatchConnectionLabel
+import com.focus.app.core.designsystem.components.smartwatchDisplayName
 import com.focus.app.platform.accessibility.FocusAccessibilityService
 
 /**
- * Pantalla de configuración de Focus adaptada con las opciones del Smartwatch Companion.
+ * Pantalla de configuración de Focus, con las opciones del reloj.
  */
 @Composable
 fun SettingsScreen(
@@ -114,10 +116,10 @@ fun SettingsScreen(
                 // ── Sección 1: Configuración del Smartwatch ───────────────────
                 SmartwatchSettingsSection(
                     uiState = uiState,
-                    onToggleHaptic = viewModel::onToggleSmartwatchHaptic,
-                    onToggleSedentarism = viewModel::onToggleSmartwatchSedentarism,
-                    onSelectThreshold = viewModel::onSedentarismThresholdSelected,
-                    onToggleRestIndicator = viewModel::onToggleSmartwatchRestIndicator
+                    onToggleHaptics = viewModel::onToggleHaptics,
+                    onToggleInactivity = viewModel::onToggleInactivityAlerts,
+                    onSelectThreshold = viewModel::onInactivityThresholdSelected,
+                    onToggleRestIndicator = viewModel::onToggleRestIndicator
                 )
 
                 // ── Sección 2: Duración predeterminada ────────────────────────
@@ -159,13 +161,13 @@ private fun SettingsTopBar(
         IconButton(onClick = onNavigateBack) {
             Icon(
                 imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                contentDescription = "Back",
+                contentDescription = stringResource(R.string.common_back),
                 tint = FocusOnSurface
             )
         }
         Spacer(modifier = Modifier.width(8.dp))
         Text(
-            text = "Configuración y Reloj",
+            text = stringResource(R.string.settings_title),
             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
             color = FocusOnSurface
         )
@@ -173,19 +175,21 @@ private fun SettingsTopBar(
 }
 
 /**
- * Sección de opciones del reloj inteligente (Vibraciones, Sedentarismo, Descanso).
+ * Sección de opciones del reloj inteligente (vibraciones, inactividad y descanso).
  */
 @Composable
 private fun SmartwatchSettingsSection(
     uiState: SettingsUiState,
-    onToggleHaptic: (Boolean) -> Unit,
-    onToggleSedentarism: (Boolean) -> Unit,
+    onToggleHaptics: (Boolean) -> Unit,
+    onToggleInactivity: (Boolean) -> Unit,
     onSelectThreshold: (Int) -> Unit,
     onToggleRestIndicator: (Boolean) -> Unit
 ) {
+    val settings = uiState.smartwatchSettings
+
     Column(modifier = Modifier.fillMaxWidth()) {
         Text(
-            text = "Smartwatch Focus (Wear OS)",
+            text = stringResource(R.string.settings_watch_section),
             style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
             color = FocusAccent
         )
@@ -227,12 +231,12 @@ private fun SmartwatchSettingsSection(
 
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = uiState.smartwatchName,
+                            text = smartwatchDisplayName(uiState.smartwatchDevice),
                             style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
                             color = FocusOnSurface
                         )
                         Text(
-                            text = if (uiState.isSmartwatchConnected) "Sincronizado vía Wear OS Data Layer" else "Buscando reloj...",
+                            text = smartwatchConnectionLabel(uiState.smartwatchDevice),
                             style = MaterialTheme.typography.bodySmall,
                             color = FocusOnSurfaceVariant
                         )
@@ -242,25 +246,25 @@ private fun SmartwatchSettingsSection(
                 // Opción: Vibraciones táctiles en muñeca
                 SettingSwitchRow(
                     icon = Icons.Rounded.Vibration,
-                    title = "Vibraciones hápticas en reloj",
-                    description = "Vibra al iniciar, a la mitad y al terminar para que no tengas que mirar la pantalla.",
-                    checked = uiState.isSmartwatchHapticEnabled,
-                    onCheckedChange = onToggleHaptic
+                    title = stringResource(R.string.settings_haptics_title),
+                    description = stringResource(R.string.settings_haptics_description),
+                    checked = settings.hapticsEnabled,
+                    onCheckedChange = onToggleHaptics
                 )
 
                 // Opción: Detección de inactividad física
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     SettingSwitchRow(
                         icon = Icons.AutoMirrored.Rounded.DirectionsWalk,
-                        title = "Detección de inactividad",
-                        description = "Detecta que llevas mucho tiempo sin moverte y te avisa para estirarte.",
-                        checked = uiState.isSmartwatchSedentarismEnabled,
-                        onCheckedChange = onToggleSedentarism
+                        title = stringResource(R.string.settings_inactivity_title),
+                        description = stringResource(R.string.settings_inactivity_description),
+                        checked = settings.inactivityAlertsEnabled,
+                        onCheckedChange = onToggleInactivity
                     )
 
-                    if (uiState.isSmartwatchSedentarismEnabled) {
+                    if (settings.inactivityAlertsEnabled) {
                         Text(
-                            text = "Avisar tras inactividad continua:",
+                            text = stringResource(R.string.settings_inactivity_threshold),
                             style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
                             color = FocusOnSurfaceVariant,
                             modifier = Modifier.padding(start = 44.dp)
@@ -272,11 +276,16 @@ private fun SmartwatchSettingsSection(
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             listOf(30, 45, 60).forEach { mins ->
-                                val isSelected = uiState.smartwatchSedentarismThresholdMinutes == mins
+                                val isSelected = settings.inactivityThresholdMinutes == mins
                                 FilterChip(
                                     selected = isSelected,
                                     onClick = { onSelectThreshold(mins) },
-                                    label = { Text("$mins min", fontSize = 11.sp) },
+                                    label = {
+                                        Text(
+                                            text = stringResource(R.string.duration_chip_minutes, mins),
+                                            fontSize = 11.sp
+                                        )
+                                    },
                                     colors = FilterChipDefaults.filterChipColors(
                                         selectedContainerColor = FocusAccentSubtle,
                                         selectedLabelColor = FocusAccentLight
@@ -290,9 +299,9 @@ private fun SmartwatchSettingsSection(
                 // Opción: Indicador de descanso
                 SettingSwitchRow(
                     icon = Icons.Rounded.SelfImprovement,
-                    title = "Indicador de descanso guiado",
-                    description = "Al terminar los 45 minutos, el reloj vibra e indica el momento exacto de descansar.",
-                    checked = uiState.isSmartwatchRestIndicatorEnabled,
+                    title = stringResource(R.string.settings_rest_title),
+                    description = stringResource(R.string.settings_rest_description),
+                    checked = settings.restIndicatorEnabled,
                     onCheckedChange = onToggleRestIndicator
                 )
             }
@@ -362,7 +371,7 @@ private fun PreferencesSection(
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
         Text(
-            text = "Duración Predeterminada",
+            text = stringResource(R.string.settings_duration_section),
             style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
             color = FocusAccent
         )
@@ -381,13 +390,13 @@ private fun PreferencesSection(
                     .padding(20.dp)
             ) {
                 Text(
-                    text = "Tiempo de concentración habitual",
+                    text = stringResource(R.string.settings_duration_title),
                     style = MaterialTheme.typography.titleSmall,
                     color = FocusOnSurface
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "El bloque estándar recomendado para el reloj es de 45 minutos.",
+                    text = stringResource(R.string.settings_duration_description),
                     style = MaterialTheme.typography.bodySmall,
                     color = FocusOnSurfaceVariant
                 )
@@ -423,7 +432,7 @@ private fun AccessibilitySection(
 
     Column(modifier = modifier.fillMaxWidth()) {
         Text(
-            text = "Bloqueo en el Celular",
+            text = stringResource(R.string.settings_blocking_section),
             style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
             color = FocusAccent
         )
@@ -463,7 +472,13 @@ private fun AccessibilitySection(
 
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = if (isEnabled) "Servicio de bloqueo activo" else "Servicio de bloqueo inactivo",
+                            text = stringResource(
+                                if (isEnabled) {
+                                    R.string.settings_accessibility_enabled
+                                } else {
+                                    R.string.settings_accessibility_disabled
+                                }
+                            ),
                             style = MaterialTheme.typography.titleSmall,
                             color = FocusOnSurface
                         )
@@ -471,13 +486,13 @@ private fun AccessibilitySection(
                 }
 
                 Text(
-                    text = "El servicio detecta apps distractoras en el celular mientras el reloj está en modo concentración.",
+                    text = stringResource(R.string.settings_accessibility_description),
                     style = MaterialTheme.typography.bodySmall,
                     color = FocusOnSurfaceVariant
                 )
 
                 FocusSecondaryButton(
-                    text = "Abrir Ajustes de Accesibilidad",
+                    text = stringResource(R.string.settings_open_accessibility),
                     onClick = onOpenSettings,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -493,7 +508,7 @@ private fun AboutSection(
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
         Text(
-            text = "Privacidad y Versión",
+            text = stringResource(R.string.settings_about_section),
             style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
             color = FocusAccent
         )
@@ -534,13 +549,13 @@ private fun AboutSection(
 
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "Privacidad sin Conexión Externa",
+                            text = stringResource(R.string.settings_privacy_title),
                             style = MaterialTheme.typography.titleSmall,
                             color = FocusOnSurface
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = "Focus procesa todo de forma local entre tu celular y tu reloj inteligente. No se envían datos personales ni estadísticas a servidores externos.",
+                            text = stringResource(R.string.settings_privacy),
                             style = MaterialTheme.typography.bodySmall,
                             color = FocusOnSurfaceVariant
                         )
@@ -553,12 +568,12 @@ private fun AboutSection(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Versión Companion",
+                        text = stringResource(R.string.settings_version),
                         style = MaterialTheme.typography.bodyMedium,
                         color = FocusOnSurfaceVariant
                     )
                     Text(
-                        text = "$versionName (Smartwatch Edition)",
+                        text = versionName,
                         style = MaterialTheme.typography.bodyMedium,
                         color = FocusOnSurface
                     )

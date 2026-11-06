@@ -3,77 +3,156 @@
     <string name="accessibility_service_label">Focus — App Restriction</string>
     <string name="accessibility_service_description">Focus uses this service to detect when a restricted app opens during an active focus session and shows a reminder screen. Focus never reads screen content, passwords, or personal data.</string>
 
-    <!-- Pantalla principal -->
-    <string name="home_subtitle">Make room for what matters.</string>
-    <string name="home_start_session">Start Focus Session</string>
-    <string name="home_select_apps">Select Apps</string>
-    <string name="home_no_apps_selected">No apps selected</string>
-    <string name="home_apps_selected">%d apps selected</string>
-    <string name="home_duration_label">Focus Duration</string>
-    <string name="home_session_ready">Ready to focus</string>
-    <string name="home_session_not_ready">Select apps to restrict</string>
-    <string name="home_restriction_unavailable">Accessibility service disabled — timer will run but apps won\'t be restricted</string>
-    <string name="home_open_settings">Settings</string>
+    <!-- Textos comunes -->
+    <string name="common_back">Back</string>
+    <string name="common_settings">Settings</string>
+    <string name="error_retry">Retry</string>
 
-    <!-- Presets de duración -->
-    <string name="duration_25_min">25 min</string>
-    <string name="duration_45_min">45 min</string>
-    <string name="duration_60_min">60 min</string>
-    <string name="duration_custom">Custom</string>
+    <!-- Pantalla principal -->
+    <string name="home_badge_companion">COMPANION</string>
+    <string name="home_subtitle">Protect your attention on your phone and your watch.</string>
+    <string name="home_activity_question">What are you going to do?</string>
+    <string name="home_duration_label">Focus Duration</string>
+    <string name="home_summary_title">Session Setup</string>
+    <string name="home_summary_activity">Selected activity</string>
+    <string name="home_summary_apps">Apps to block on phone</string>
+    <string name="home_summary_apps_none">None (timer only)</string>
+    <string name="home_summary_apps_count">%d blocked</string>
+    <string name="home_summary_service">Blocking service</string>
+    <string name="home_summary_service_active">Active</string>
+    <string name="home_summary_service_disabled">Disabled</string>
+    <string name="home_readiness_ready">Ready: phone and watch synced for %s</string>
+    <string name="home_readiness_no_watch">Ready: apps will be blocked on this phone (no watch connected)</string>
+    <string name="home_readiness_needs_accessibility">Turn on accessibility to block apps on this phone</string>
+    <string name="home_readiness_timer_only">No apps selected: only the timer will run</string>
+    <string name="home_start_session">Start Focus Session</string>
+    <string name="home_select_apps">Choose Apps to Block</string>
+    <string name="home_blocked_apps">Blocked Apps (%d)</string>
+    <string name="home_accessibility_warning">The accessibility service is off. The timer and watch will work, but apps won\'t be blocked on this phone. Tap to turn it on.</string>
+
+    <!-- Duraciones -->
+    <string name="duration_minutes">%d minutes</string>
+    <string name="duration_one_hour">1 hour</string>
+    <string name="duration_hours">%d hours</string>
+    <string name="duration_hours_minutes">%1$dh %2$dm</string>
+    <string name="duration_chip_minutes">%d min</string>
+    <string name="duration_chip_one_hour">1 hr</string>
+    <string name="duration_chip_hours">%d hrs</string>
+    <string name="duration_chip_recommended">RECOMMENDED</string>
 
     <!-- Selección de aplicaciones -->
     <string name="app_selection_title">Select Apps to Restrict</string>
     <string name="app_selection_search_hint">Search apps…</string>
+    <string name="app_selection_search_clear">Clear search</string>
     <string name="app_selection_empty">No apps found</string>
+    <string name="app_selection_no_match">No apps match \"%s\"</string>
+    <string name="app_selection_no_apps">No launchable apps found</string>
     <string name="app_selection_loading">Loading your apps…</string>
     <string name="app_selection_error">Could not load apps. Please try again.</string>
     <string name="app_selection_done">Done</string>
+    <string name="app_selection_done_count">Done (%d)</string>
     <string name="app_selection_selected_count">%d selected</string>
     <string name="app_selection_clear_all">Clear all</string>
-    <string name="app_selection_select_all">Select all</string>
+    <string name="app_item_selected">Selected</string>
+    <string name="app_item_not_selected">Not selected</string>
 
     <!-- Pantalla de sesión activa -->
-    <string name="session_title">Stay Focused</string>
-    <string name="session_status_active">Session active</string>
-    <string name="session_status_completed">Session complete!</string>
-    <string name="session_status_interrupted">Session ended</string>
-    <string name="session_end_button">End Session</string>
-    <string name="session_end_confirm_title">End session?</string>
-    <string name="session_end_confirm_message">Your focus session will end and app restrictions will be removed.</string>
-    <string name="session_end_confirm_yes">End Session</string>
-    <string name="session_end_confirm_no">Keep Going</string>
-    <string name="session_restricted_apps">%d apps restricted</string>
+    <string name="session_title_focusing">Focus Mode Active</string>
+    <string name="session_title_resting">Time to Rest</string>
+    <string name="session_title_completed">Session Complete!</string>
+    <string name="session_status_focusing">Protecting your attention</string>
+    <string name="session_status_completed">Completed</string>
+    <string name="session_watch_synced">Watch Synced</string>
+    <string name="session_watch_not_connected">No Watch</string>
+    <string name="session_end_button">End Focus Session</string>
     <string name="session_done_button">Done</string>
-    <string name="session_great_job">Great job!</string>
-    <string name="session_completed_message">You completed a %s focus session.</string>
+    <string name="session_end_confirm_title">End session early?</string>
+    <string name="session_end_confirm_message">Your apps will be unblocked and your watch will stop the session.</string>
+    <string name="session_end_confirm_yes">Yes, end it</string>
+    <string name="session_end_confirm_no">Stay focused</string>
+    <string name="session_inactivity_title">You\'ve been still for a long time</string>
+    <string name="session_inactivity_subtitle">Time for a quick stretch</string>
+    <string name="session_inactivity_message">You\'ve been in the same position for about %d minutes. Stand up, stretch your arms, or walk for a minute.</string>
+    <string name="session_inactivity_acknowledge">I stretched! Continue session</string>
+    <string name="session_break_title">Time for a break!</string>
+    <string name="session_break_message">Look at something far away, breathe deeply, and relax your eyes before your next block.</string>
+    <string name="session_break_skip">Skip break and finish</string>
 
     <!-- Pantalla de restricción (mostrada por AccessibilityService) -->
     <string name="restriction_title">You\'re in Focus mode</string>
     <string name="restriction_message">You selected this app to restrict during your focus session. Stay on track!</string>
-    <string name="restriction_time_remaining">Time remaining: %s</string>
-    <string name="restriction_go_back">Go back</string>
+    <string name="restriction_message_named">%s is blocked during your focus session. Stay on track!</string>
+    <string name="restriction_time_remaining">Time remaining</string>
+    <string name="restriction_go_back">Go Back</string>
     <string name="restriction_end_session">End Session</string>
 
+    <!-- Tarjeta del reloj -->
+    <string name="watch_content_description">Smartwatch</string>
+    <string name="watch_connected_description">Connected</string>
+    <string name="watch_battery_description">Battery</string>
+    <string name="watch_scan_description">Search for watch</string>
+    <string name="watch_name_searching">Searching for watch…</string>
+    <string name="watch_name_none">No watch connected</string>
+    <string name="watch_state_searching">Checking Wear OS connection</string>
+    <string name="watch_state_disconnected">Pair a Wear OS watch to sync</string>
+    <string name="watch_state_missing_app">Paired, Focus isn\'t installed on the watch</string>
+    <string name="watch_state_bluetooth">Connected via Bluetooth</string>
+    <string name="watch_state_cloud">Connected via Wi-Fi or cloud</string>
+    <string name="watch_feature_blocking">Blocks distractions</string>
+    <string name="watch_feature_haptics">Haptic alerts</string>
+    <string name="watch_feature_inactivity">Detects inactivity</string>
+    <string name="watch_hint_connected">Vibrations and alerts are sent to your wrist.</string>
+    <string name="watch_hint_disconnected">Without a watch, alerts vibrate on this phone only.</string>
+    <string name="watch_test_vibration">Test vibration</string>
+
+    <!-- Vista previa del reloj -->
+    <string name="watch_preview_title">Focus Watch Screen</string>
+    <string name="watch_preview_mode">Ultra-Simple Mode</string>
+    <string name="watch_preview_rest">REST</string>
+    <string name="watch_preview_move">MOVE!</string>
+    <string name="watch_preview_hint_rest">Breathe deeply</string>
+    <string name="watch_preview_hint_move">Stand up</string>
+    <string name="watch_preview_hint_focus">Zero alerts</string>
+    <string name="watch_preview_description">Your attention is protected: the screen stays dark and your watch vibrates when it\'s time to rest or move.</string>
+
     <!-- Configuración -->
-    <string name="settings_title">Settings</string>
-    <string name="settings_accessibility_section">Accessibility Service</string>
-    <string name="settings_accessibility_enabled">Focus restriction service is active</string>
-    <string name="settings_accessibility_disabled">Focus restriction service is disabled</string>
-    <string name="settings_accessibility_description">Focus needs Android\'s Accessibility Service to detect when restricted apps are opened. This service only reads window events — never your screen content or personal data.</string>
+    <string name="settings_title">Settings and Watch</string>
+    <string name="settings_watch_section">Focus Smartwatch (Wear OS)</string>
+    <string name="settings_haptics_title">Watch haptic vibrations</string>
+    <string name="settings_haptics_description">Vibrates at the start, halfway point, and end so you don\'t have to look at the screen.</string>
+    <string name="settings_inactivity_title">Inactivity detection</string>
+    <string name="settings_inactivity_description">Notices when you haven\'t moved for a long time and reminds you to stretch.</string>
+    <string name="settings_inactivity_threshold">Alert after continuous inactivity:</string>
+    <string name="settings_rest_title">Guided rest indicator</string>
+    <string name="settings_rest_description">When a session ends, your watch vibrates and starts a guided break.</string>
+    <string name="settings_duration_section">Default Duration</string>
+    <string name="settings_duration_title">Usual focus time</string>
+    <string name="settings_duration_description">The recommended block is 45 minutes.</string>
+    <string name="settings_blocking_section">Phone Blocking</string>
+    <string name="settings_accessibility_enabled">Blocking service is active</string>
+    <string name="settings_accessibility_disabled">Blocking service is off</string>
+    <string name="settings_accessibility_description">Focus needs Android\'s Accessibility Service to detect when restricted apps are opened. It only reads window events, never your screen content or personal data.</string>
     <string name="settings_open_accessibility">Open Accessibility Settings</string>
-    <string name="settings_preferences_section">Preferences</string>
-    <string name="settings_default_duration">Default Duration</string>
-    <string name="settings_about_section">About</string>
+    <string name="settings_about_section">Privacy and Version</string>
+    <string name="settings_privacy_title">Private by Design</string>
+    <string name="settings_privacy">Focus works locally between your phone and your watch. No personal data or statistics are sent to external servers.</string>
     <string name="settings_version">Version</string>
-    <string name="settings_privacy">Focus is 100%% local — no data ever leaves your device.</string>
 
-    <!-- Errores genéricos -->
-    <string name="error_generic">Something went wrong. Please try again.</string>
-    <string name="error_retry">Retry</string>
-
-    <!-- Notificación de sesión activa -->
+    <!-- Notificaciones -->
     <string name="notification_channel_name">Focus Session</string>
     <string name="notification_channel_description">Shows when a focus session is active</string>
-    <string name="notification_session_active">Focus session active — %s remaining</string>
-    <string name="notification_session_title">Focus</string>
+    <string name="notification_completed_channel_name">Completed Sessions</string>
+    <string name="notification_completed_channel_description">Lets you know when a focus session ends</string>
+    <string name="notification_focusing_title">Focus: %s</string>
+    <plurals name="notification_focusing_text">
+        <item quantity="one">%d app blocked</item>
+        <item quantity="other">%d apps blocked</item>
+    </plurals>
+    <string name="notification_resting_title">Time to rest</string>
+    <string name="notification_resting_text">Relax your eyes before the next block</string>
+    <string name="notification_completed_title">Session complete!</string>
+    <plurals name="notification_completed_text">
+        <item quantity="one">You stayed focused for %d minute.</item>
+        <item quantity="other">You stayed focused for %d minutes.</item>
+    </plurals>
 </resources>

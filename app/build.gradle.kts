@@ -19,9 +19,6 @@ android {
         versionName = "1.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-
-        // Identificador de la aplicación para excluirse a sí misma de la lista
-        buildConfigField("String", "APPLICATION_PACKAGE", "\"com.focus.app\"")
     }
 
     buildTypes {
@@ -34,8 +31,8 @@ android {
             )
         }
         debug {
+            // Sin sufijo: la Wearable Data Layer exige el mismo applicationId en el reloj
             isMinifyEnabled = false
-            applicationIdSuffix = ".debug"
         }
     }
 
@@ -118,6 +115,7 @@ dependencies {
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.mockk)
     testImplementation(libs.androidx.arch.core.testing)
+    testImplementation(libs.json)
 
     // Tests instrumentados
     androidTestImplementation(libs.androidx.junit)
